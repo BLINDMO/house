@@ -42,6 +42,21 @@ App icons are generated with a tiny zero-dependency script:
 node scripts/generateIcons.mjs
 ```
 
+## Deploy (GitHub Pages, no Actions required)
+
+The production site is built into the committed `docs/` folder so it can be served
+directly by GitHub Pages' "deploy from a branch" mode:
+
+```bash
+npm run build:pages   # builds the static site into ./docs (with .nojekyll)
+```
+
+Then, once in the repo settings: **Settings → Pages → Build and deployment →
+Source: _Deploy from a branch_ → Branch: `claude/room-design-pwa-qxojfo` / `/docs`**.
+The site will be served at `https://<owner>.github.io/house/`. Because the build
+uses relative asset paths, it works correctly under that sub-path. Re-run
+`npm run build:pages` and commit `docs/` whenever you want to publish changes.
+
 ## How it's organised
 
 | Path | Purpose |

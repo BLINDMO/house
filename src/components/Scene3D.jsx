@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { useStore, footHalf } from '../store.jsx'
 import { CATALOG_BY_TYPE } from '../data/catalog.js'
-import { snapPosition, haptic } from '../util.js'
+import { snapPosition, haptic, effDims } from '../util.js'
 import { buildItem, disposeGroup } from '../three/furniture.js'
 import { IconCenter } from './Icons.jsx'
 
@@ -174,6 +174,7 @@ export default function Scene3D() {
           offZ: p ? p.z - grp.position.z : 0,
           rot: it?.rot || 0,
           type: it?.type,
+          scale: it?.scale,
           moved: false,
           sx: e.clientX, sy: e.clientY,
         }
@@ -193,7 +194,7 @@ export default function Scene3D() {
       const hw = rm.width / 2
       const hd = rm.depth / 2
       const c = CATALOG_BY_TYPE[d.type]
-      const half = footHalf(c, d.rot)
+      const half = footHalf(c, d.rot, d.scale)
       const targetX = p.x - d.offX + hw
       const targetZ = p.z - d.offZ + hd
       const snapped = snapPosition(targetX, targetZ, half.x, half.z, rm)
@@ -344,6 +345,8 @@ export default function Scene3D() {
       }
       entry.group.position.set(it.x - hw, 0, it.z - hd)
       entry.group.rotation.y = -((it.rot || 0) * Math.PI) / 180
+      const s = it.scale || {}
+      entry.group.scale.set(s.x ?? 1, s.y ?? 1, s.z ?? 1)
     }
     for (const [uid, entry] of map) {
       if (!seen.has(uid)) {
@@ -357,7 +360,8 @@ export default function Scene3D() {
     const sel = items.find((i) => i.uid === selected)
     if (sel) {
       const c = CATALOG_BY_TYPE[sel.type]
-      const radius = (Math.max(c.w, c.d) / 2) * 1.12 + 0.06
+      const d = effDims(c, sel)
+      const radius = (Math.max(d.w, d.d) / 2) * 1.12 + 0.06
       r.ring.scale.setScalar(radius / 0.5)
       r.ring.position.set(sel.x - hw, 0.03, sel.z - hd)
       r.ring.visible = true

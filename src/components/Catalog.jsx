@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { CATALOG, CATEGORIES } from '../data/catalog.js'
+import { useStore } from '../store.jsx'
+import { formatLen } from '../util.js'
 import Footprint from './Footprint.jsx'
 
 function Thumb({ item }) {
@@ -19,6 +21,8 @@ function Thumb({ item }) {
 }
 
 export default function Catalog({ onPick }) {
+  const { state } = useStore()
+  const { units } = state
   const [cat, setCat] = useState('All')
   const cats = ['All', ...CATEGORIES]
   const list = useMemo(
@@ -48,7 +52,7 @@ export default function Catalog({ onPick }) {
           <button key={item.type} className="card" onClick={() => onPick(item.type)}>
             <div className="thumb"><Thumb item={item} /></div>
             <div className="name">{item.name}</div>
-            <div className="dim">{item.w.toFixed(1)} × {item.d.toFixed(1)} m</div>
+            <div className="dim">{formatLen(item.w, units)} × {formatLen(item.d, units)}</div>
           </button>
         ))}
       </div>
