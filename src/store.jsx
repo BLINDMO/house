@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useReducer, useRef } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react'
 import { CATALOG_BY_TYPE } from './data/catalog.js'
 
 const KEY = 'atelier.design.v1'
@@ -9,7 +9,8 @@ const uid = () => `${Date.now().toString(36)}-${(seq++).toString(36)}`
 function starter() {
   return {
     view: '2d',
-    room: { width: 5.0, depth: 4.0, height: 2.7, floor: 'oak' },
+    ambiance: 'day',
+    room: { width: 5.0, depth: 4.0, height: 2.7 },
     items: [
       { uid: uid(), type: 'sofa', x: 2.5, z: 0.7, rot: 0, color: '#7d8aa0' },
       { uid: uid(), type: 'coffee-table', x: 2.5, z: 1.75, rot: 0, color: '#7a5c41' },
@@ -30,6 +31,7 @@ function load() {
     const data = JSON.parse(raw)
     if (!data || !data.room || !Array.isArray(data.items)) return starter()
     data.selected = null
+    if (!data.ambiance) data.ambiance = 'day'
     return data
   } catch {
     return starter()
@@ -40,17 +42,20 @@ function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v))
 }
 
+// ---- core reducer (operates on a single present state) ----
 function reducer(state, action) {
   switch (action.type) {
     case 'view':
       return { ...state, view: action.view }
+
+    case 'ambiance':
+      return { ...state, ambiance: action.value }
 
     case 'room': {
       const room = { ...state.room, ...action.patch }
       room.width = clamp(room.width, 2, 14)
       room.depth = clamp(room.depth, 2, 14)
       room.height = clamp(room.height, 2.1, 4)
-      // keep items inside the new bounds
       const items = state.items.map((it) => {
         const c = CATALOG_BY_TYPE[it.type]
         const half = footHalf(c, it.rot)
@@ -135,10 +140,57 @@ function reducer(state, action) {
       return { ...state, items: [], selected: null }
 
     case 'reset':
-      return { ...starter(), view: state.view }
+      return { ...starter(), view: state.view, ambiance: state.ambiance }
 
     default:
       return state
+  }
+}
+
+// ---- history wrapper (undo / redo with drag coalescing) ----
+const HISTORIC = new Set(['add', 'update', 'remove', 'duplicate', 'clear', 'reset', 'resize', 'room'])
+const LIMIT = 60
+
+function root(c, action) {
+  if (action.type === 'undo') {
+    if (!c.past.length) return c
+    const prev = c.past[c.past.length - 1]
+    return {
+      past: c.past.slice(0, -1),
+      present: { ...prev, view: c.present.view, ambiance: c.present.ambiance },
+      future: [c.present, ...c.future].slice(0, LIMIT),
+      lastKey: null,
+      lastTime: 0,
+    }
+  }
+  if (action.type === 'redo') {
+    if (!c.future.length) return c
+    const next = c.future[0]
+    return {
+      past: [...c.past, c.present].slice(-LIMIT),
+      present: { ...next, view: c.present.view, ambiance: c.present.ambiance },
+      future: c.future.slice(1),
+      lastKey: null,
+      lastTime: 0,
+    }
+  }
+
+  if (!HISTORIC.has(action.type)) {
+    return { ...c, present: reducer(c.present, action) }
+  }
+
+  const now = Date.now()
+  const key = action.mergeKey
+  // coalesce continuous gestures (e.g. dragging) into one undo step
+  if (key && key === c.lastKey && now - c.lastTime < 1500) {
+    return { ...c, present: reducer(c.present, action), lastTime: now }
+  }
+  return {
+    past: [...c.past, c.present].slice(-LIMIT),
+    present: reducer(c.present, action),
+    future: [],
+    lastKey: key || null,
+    lastTime: now,
   }
 }
 
@@ -153,8 +205,12 @@ export function footHalf(c, rot) {
 const Ctx = createContext(null)
 
 export function StoreProvider({ children }) {
-  const [state, dispatch] = useReducer(reducer, undefined, load)
+  const [container, dispatch] = useReducer(root, undefined, () => ({
+    past: [], present: load(), future: [], lastKey: null, lastTime: 0,
+  }))
   const t = useRef(null)
+
+  const state = container.present
 
   useEffect(() => {
     clearTimeout(t.current)
@@ -168,7 +224,12 @@ export function StoreProvider({ children }) {
     return () => clearTimeout(t.current)
   }, [state])
 
-  return <Ctx.Provider value={{ state, dispatch }}>{children}</Ctx.Provider>
+  const value = useMemo(
+    () => ({ state, dispatch, canUndo: container.past.length > 0, canRedo: container.future.length > 0 }),
+    [state, container.past.length, container.future.length]
+  )
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }
 
 export function useStore() {

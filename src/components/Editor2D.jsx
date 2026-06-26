@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { useStore } from '../store.jsx'
+import { useStore, footHalf } from '../store.jsx'
 import { CATALOG_BY_TYPE } from '../data/catalog.js'
+import { snapPosition } from '../util.js'
 import Footprint from './Footprint.jsx'
 
 const PAD = 52
@@ -89,7 +90,11 @@ export default function Editor2D({ onSelect, onEdit }) {
       if (!g.moved && Math.hypot(px - g.sx, py - g.sy) > 4) {
         setGesture((s) => ({ ...s, moved: true }))
       }
-      dispatch({ type: 'update', uid: g.uid, patch: { x: wx - g.ox, z: wz - g.oz } })
+      const it = items.find((i) => i.uid === g.uid)
+      const c = it && CATALOG_BY_TYPE[it.type]
+      const half = footHalf(c, it?.rot || 0)
+      const snapped = snapPosition(wx - g.ox, wz - g.oz, half.x, half.z, room)
+      dispatch({ type: 'update', uid: g.uid, patch: snapped, mergeKey: `move:${g.uid}` })
     } else if (g.kind === 'resize') {
       const L = g.layout
       const wx = (px - L.ox) / L.scale

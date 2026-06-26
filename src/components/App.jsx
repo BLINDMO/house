@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { useStore } from '../store.jsx'
+import { haptic } from '../util.js'
 import Editor2D from './Editor2D.jsx'
 import Scene3D from './Scene3D.jsx'
 import Catalog from './Catalog.jsx'
@@ -7,18 +8,16 @@ import Inspector from './Inspector.jsx'
 import RoomSheet from './RoomSheet.jsx'
 import {
   IconPlan, IconCube, IconPlus, IconRoom, IconRotate, IconCopy,
-  IconTrash, IconTune,
+  IconTrash, IconTune, IconUndo, IconRedo, IconShare,
 } from './Icons.jsx'
 
 export default function App() {
-  const { state, dispatch } = useStore()
+  const { state, dispatch, canUndo, canRedo } = useStore()
   const { view, selected, items } = state
   const [sheet, setSheet] = useState(null) // 'catalog' | 'room' | 'inspector'
   const [toast, setToast] = useState(null)
 
-  const flash = useCallback((msg) => {
-    setToast(msg)
-  }, [])
+  const flash = useCallback((msg) => setToast({ msg, t: Date.now() }), [])
 
   useEffect(() => {
     if (!toast) return
@@ -28,7 +27,6 @@ export default function App() {
 
   const sel = items.find((i) => i.uid === selected) || null
 
-  // Close any open contextual sheet if the selection disappears.
   useEffect(() => {
     if (sheet === 'inspector' && !sel) setSheet(null)
   }, [sheet, sel])
@@ -38,7 +36,27 @@ export default function App() {
   const addKind = (kind) => {
     dispatch({ type: 'add', kind })
     setSheet(null)
+    haptic(10)
     flash('Added — drag to position')
+  }
+
+  const exportView = async () => {
+    try {
+      let dataUrl
+      if (view === '3d') {
+        const canvas = document.querySelector('.scene3d canvas')
+        if (!canvas) return
+        dataUrl = canvas.toDataURL('image/png')
+      } else {
+        const svg = document.querySelector('.editor2d svg')
+        if (!svg) return
+        dataUrl = await svgToPng(svg)
+      }
+      await shareOrDownload(dataUrl, `atelier-room-${Date.now()}.png`)
+      flash('Image saved')
+    } catch {
+      flash('Could not export')
+    }
   }
 
   return (
@@ -64,17 +82,24 @@ export default function App() {
             <IconCube size={16} /> 3D
           </button>
         </div>
+
+        <div className="tools">
+          <button className="tool" onClick={exportView} aria-label="Export image"><IconShare size={18} /></button>
+        </div>
       </header>
 
       <main className="stage">
         {view === '2d' ? (
-          <Editor2D
-            onSelect={(uid) => dispatch({ type: 'select', uid })}
-            onEdit={() => setSheet('inspector')}
-          />
+          <Editor2D onSelect={(uid) => dispatch({ type: 'select', uid })} />
         ) : (
           <Scene3D />
         )}
+
+        {/* undo / redo */}
+        <div className="undo-cluster">
+          <button className="tool" disabled={!canUndo} onClick={() => dispatch({ type: 'undo' })} aria-label="Undo"><IconUndo size={18} /></button>
+          <button className="tool" disabled={!canRedo} onClick={() => dispatch({ type: 'redo' })} aria-label="Redo"><IconRedo size={18} /></button>
+        </div>
 
         {items.length === 0 && (
           <div className="empty">
@@ -83,13 +108,12 @@ export default function App() {
           </div>
         )}
 
-        {/* Contextual action bar for the selected piece */}
         {sel && (
           <ActionBar
-            onRotate={() => dispatch({ type: 'update', uid: sel.uid, patch: { rot: ((sel.rot || 0) + 90) % 360 } })}
-            onDup={() => { dispatch({ type: 'duplicate', uid: sel.uid }); flash('Duplicated') }}
+            onRotate={() => { dispatch({ type: 'update', uid: sel.uid, patch: { rot: ((sel.rot || 0) + 90) % 360 } }); haptic(6) }}
+            onDup={() => { dispatch({ type: 'duplicate', uid: sel.uid }); haptic(8); flash('Duplicated') }}
             onEdit={() => setSheet('inspector')}
-            onDelete={() => { dispatch({ type: 'remove', uid: sel.uid }); flash('Removed') }}
+            onDelete={() => { dispatch({ type: 'remove', uid: sel.uid }); haptic(12); flash('Removed') }}
           />
         )}
       </main>
@@ -103,7 +127,7 @@ export default function App() {
         </button>
       </nav>
 
-      {toast && <div className="toast">{toast}</div>}
+      {toast && <div className="toast" key={toast.t}>{toast.msg}</div>}
 
       {sheet === 'catalog' && (
         <Sheet onClose={() => setSheet(null)}>
@@ -126,7 +150,7 @@ export default function App() {
 
 function ActionBar({ onRotate, onDup, onEdit, onDelete }) {
   return (
-    <div className="fab-col" style={{ bottom: 'calc(var(--safe-bottom) + 92px)' }}>
+    <div className="fab-col">
       <button className="fab" onClick={onRotate} aria-label="Rotate"><IconRotate size={20} /></button>
       <button className="fab" onClick={onDup} aria-label="Duplicate"><IconCopy size={20} /></button>
       <button className="fab primary" onClick={onEdit} aria-label="Edit"><IconTune size={20} /></button>
@@ -145,4 +169,44 @@ function Sheet({ children, onClose }) {
       </div>
     </>
   )
+}
+
+// ---- export helpers ----
+function svgToPng(svg) {
+  return new Promise((resolve, reject) => {
+    const rect = svg.getBoundingClientRect()
+    const w = Math.max(1, Math.round(rect.width))
+    const h = Math.max(1, Math.round(rect.height))
+    const scale = 2
+    const xml = new XMLSerializer().serializeToString(svg)
+    const src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(xml)))
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = w * scale
+      canvas.height = h * scale
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#13161c'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      resolve(canvas.toDataURL('image/png'))
+    }
+    img.onerror = reject
+    img.src = src
+  })
+}
+
+async function shareOrDownload(dataUrl, name) {
+  const blob = await (await fetch(dataUrl)).blob()
+  const file = new File([blob], name, { type: 'image/png' })
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    await navigator.share({ files: [file], title: 'My room · Atelier' })
+    return
+  }
+  const a = document.createElement('a')
+  a.href = dataUrl
+  a.download = name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
 }
