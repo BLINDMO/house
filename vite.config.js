@@ -10,9 +10,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Atelier — Room Designer',
-        short_name: 'Atelier',
-        description: 'Design rooms in 2D and 3D. Drag, resize, and furnish your space.',
+        name: 'Honeycutt Room Studio',
+        short_name: 'Honeycutt',
+        description: 'Draw rooms and walls, then design and view your space in 2D and 3D.',
         theme_color: '#0e1014',
         background_color: '#0e1014',
         display: 'standalone',

@@ -4,98 +4,123 @@ import { CATALOG_BY_TYPE, PALETTE } from '../data/catalog.js'
 import { effDims, formatLen } from '../util.js'
 import { IconRotate, IconCopy, IconTrash } from './Icons.jsx'
 
-export default function Inspector({ item, onClose, onFlash }) {
+function Slider({ label, value, min, max, step, onChange, display }) {
+  return (
+    <div className="row">
+      <div className="label">{label}</div>
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={(e) => onChange(Number(e.target.value))} />
+      <div className="val" style={{ width: 64, textAlign: 'right' }}>{display}</div>
+    </div>
+  )
+}
+
+export default function Inspector({ onClose, onFlash }) {
   const { state, dispatch } = useStore()
-  const { units } = state
-  const c = CATALOG_BY_TYPE[item.type]
-  if (!c) return null
+  const { selected, units, items, rooms, walls } = state
+  if (!selected) return null
 
-  const set = (patch, mergeKey) => dispatch({ type: 'update', uid: item.uid, patch, mergeKey })
-  const dim = effDims(c, item)
-  const s = item.scale || {}
-  const avg = Math.round((((s.x ?? 1) + (s.z ?? 1)) / 2) * 100)
+  const sel = selected
+  const set = (patch, mergeKey) => dispatch({ type: 'update', sel, patch, mergeKey })
+  const del = () => { dispatch({ type: 'remove', sel }); onFlash?.('Removed'); onClose() }
+  const dup = () => { dispatch({ type: 'duplicate', sel }); onFlash?.('Duplicated'); onClose() }
 
+  if (sel.type === 'item') {
+    const item = items.find((i) => i.uid === sel.uid)
+    const c = item && CATALOG_BY_TYPE[item.type]
+    if (!item || !c) return null
+    const dim = effDims(c, item)
+    const s = item.scale || {}
+    const avg = Math.round((((s.x ?? 1) + (s.z ?? 1)) / 2) * 100)
+    return (
+      <>
+        <Head title={c.name} sub={`${formatLen(dim.w, units)} × ${formatLen(dim.d, units)} × ${formatLen(dim.h, units)}`} onClose={onClose} />
+        <div className="insp">
+          <div className="row" style={{ alignItems: 'flex-start' }}>
+            <div className="label">Colour</div>
+            <div className="swatches" style={{ marginLeft: 'auto', maxWidth: '70%', justifyContent: 'flex-end' }}>
+              {PALETTE.map((p) => (
+                <button key={p} className={`swatch ${(item.color || c.color) === p ? 'active' : ''}`} style={{ background: p }} onClick={() => set({ color: p })} aria-label={`Colour ${p}`} />
+              ))}
+            </div>
+          </div>
+          <Slider label="Size" value={avg} min={30} max={300} step={1}
+            onChange={(v) => set({ scale: { x: v / 100, y: v / 100, z: v / 100 } }, `sz:${item.uid}`)} display={`${avg}%`} />
+          <div className="row"><div className="label">Footprint</div><div className="val">{formatLen(dim.w, units)} × {formatLen(dim.d, units)}</div></div>
+          <Slider label="Rotation" value={item.rot || 0} min={0} max={359} step={1}
+            onChange={(v) => set({ rot: v }, `rot:${item.uid}`)} display={`${Math.round(item.rot || 0)}°`} />
+          <div className="row">
+            <div className="label">Quick turn</div>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+              {[0, 90, 180, 270].map((deg) => (
+                <button key={deg} className="chip" style={(item.rot || 0) === deg ? activeChip : undefined} onClick={() => set({ rot: deg })}>{deg}°</button>
+              ))}
+            </div>
+          </div>
+          <div className="btn-row">
+            <button className="btn" onClick={() => set({ rot: ((item.rot || 0) + 90) % 360 })}><IconRotate size={18} /> Rotate</button>
+            <button className="btn" onClick={dup}><IconCopy size={18} /> Duplicate</button>
+          </div>
+          <div className="btn-row">
+            <button className="btn" onClick={() => set({ scale: { x: 1, y: 1, z: 1 } })}>Reset size</button>
+            <button className="btn danger" onClick={del}><IconTrash size={18} /> Delete</button>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  if (sel.type === 'room') {
+    const room = rooms.find((r) => r.uid === sel.uid)
+    if (!room) return null
+    const area = room.w * room.d
+    return (
+      <>
+        <Head title="Room" sub={`${formatLen(room.w, units)} × ${formatLen(room.d, units)}`} onClose={onClose} />
+        <div className="insp">
+          <Slider label="Width" value={room.w} min={0.5} max={40} step={0.1} onChange={(v) => set({ w: v }, `rw:${room.uid}`)} display={formatLen(room.w, units)} />
+          <Slider label="Depth" value={room.d} min={0.5} max={40} step={0.1} onChange={(v) => set({ d: v }, `rd:${room.uid}`)} display={formatLen(room.d, units)} />
+          <Slider label="Wall height" value={room.height} min={1.5} max={6} step={0.1} onChange={(v) => set({ height: v }, `rh:${room.uid}`)} display={formatLen(room.height, units)} />
+          <div className="row"><div className="label">Floor area</div><div className="val">{units === 'm' ? `${area.toFixed(1)} m²` : `${Math.round(area * 10.7639)} ft²`}</div></div>
+          <div className="btn-row">
+            <button className="btn" onClick={dup}><IconCopy size={18} /> Duplicate</button>
+            <button className="btn danger" onClick={del}><IconTrash size={18} /> Delete</button>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  // wall
+  const wall = walls.find((w) => w.uid === sel.uid)
+  if (!wall) return null
+  const len = Math.hypot(wall.x2 - wall.x1, wall.z2 - wall.z1)
   return (
     <>
-      <div className="sheet-head">
-        <div>
-          <h2>{c.name}</h2>
-          <div className="sub">{formatLen(dim.w, units)} × {formatLen(dim.d, units)} × {formatLen(dim.h, units)}</div>
-        </div>
-        <button className="close" onClick={onClose} aria-label="Close">✕</button>
-      </div>
-
+      <Head title="Wall" sub={`${formatLen(len, units)} long`} onClose={onClose} />
       <div className="insp">
-        <div className="row" style={{ alignItems: 'flex-start' }}>
-          <div className="label">Colour</div>
-          <div className="swatches" style={{ marginLeft: 'auto', maxWidth: '70%', justifyContent: 'flex-end' }}>
-            {PALETTE.map((p) => (
-              <button
-                key={p}
-                className={`swatch ${(item.color || c.color) === p ? 'active' : ''}`}
-                style={{ background: p }}
-                onClick={() => set({ color: p })}
-                aria-label={`Colour ${p}`}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="row">
-          <div className="label">Size</div>
-          <input
-            type="range" min="40" max="250" value={avg}
-            onChange={(e) => {
-              const v = Number(e.target.value) / 100
-              set({ scale: { x: v, y: v, z: v } }, `size:${item.uid}`)
-            }}
-          />
-          <div className="val" style={{ width: 48, textAlign: 'right' }}>{avg}%</div>
-        </div>
-
-        <div className="row">
-          <div className="label">Footprint</div>
-          <div className="val">{formatLen(dim.w, units)} × {formatLen(dim.d, units)}</div>
-        </div>
-
-        <div className="row">
-          <div className="label">Rotation</div>
-          <input type="range" min="0" max="359" value={item.rot || 0}
-            onChange={(e) => set({ rot: Number(e.target.value) }, `rot:${item.uid}`)} />
-          <div className="val" style={{ width: 44, textAlign: 'right' }}>{Math.round(item.rot || 0)}°</div>
-        </div>
-
-        <div className="row">
-          <div className="label">Quick turn</div>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            {[0, 90, 180, 270].map((deg) => (
-              <button
-                key={deg}
-                className="chip"
-                style={(item.rot || 0) === deg ? { color: 'var(--accent)', borderColor: 'var(--accent-line)', background: 'var(--accent-soft)' } : undefined}
-                onClick={() => set({ rot: deg })}
-              >
-                {deg}°
-              </button>
-            ))}
-          </div>
-        </div>
-
+        <div className="row"><div className="label">Length</div><div className="val">{formatLen(len, units)}</div></div>
+        <Slider label="Height" value={wall.height} min={1.5} max={6} step={0.1} onChange={(v) => set({ height: v }, `wh:${wall.uid}`)} display={formatLen(wall.height, units)} />
+        <Slider label="Thickness" value={wall.thickness} min={0.05} max={0.4} step={0.01} onChange={(v) => set({ thickness: v }, `wt:${wall.uid}`)} display={formatLen(wall.thickness, units)} />
         <div className="btn-row">
-          <button className="btn" onClick={() => set({ rot: ((item.rot || 0) + 90) % 360 })}>
-            <IconRotate size={18} /> Rotate
-          </button>
-          <button className="btn" onClick={() => { dispatch({ type: 'duplicate', uid: item.uid }); onFlash?.('Duplicated'); onClose() }}>
-            <IconCopy size={18} /> Duplicate
-          </button>
-        </div>
-        <div className="btn-row">
-          <button className="btn" onClick={() => set({ scale: { x: 1, y: 1, z: 1 } })}>Reset size</button>
-          <button className="btn danger" onClick={() => { dispatch({ type: 'remove', uid: item.uid }); onFlash?.('Removed'); onClose() }}>
-            <IconTrash size={18} /> Delete
-          </button>
+          <button className="btn" onClick={dup}><IconCopy size={18} /> Duplicate</button>
+          <button className="btn danger" onClick={del}><IconTrash size={18} /> Delete</button>
         </div>
       </div>
     </>
+  )
+}
+
+const activeChip = { color: 'var(--accent)', borderColor: 'var(--accent-line)', background: 'var(--accent-soft)' }
+
+function Head({ title, sub, onClose }) {
+  return (
+    <div className="sheet-head">
+      <div>
+        <h2>{title}</h2>
+        <div className="sub">{sub}</div>
+      </div>
+      <button className="close" onClick={onClose} aria-label="Close">✕</button>
+    </div>
   )
 }

@@ -55,3 +55,15 @@ export const IconShare = (p) => (
 export const IconSun = (p) => (
   <S {...p}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></S>
 )
+export const IconCursor = (p) => (
+  <S {...p}><path d="M5 3l6.5 16 2.2-6.3L20 10.5 5 3Z" /></S>
+)
+export const IconSquare = (p) => (
+  <S {...p}><rect x="4" y="4" width="16" height="16" rx="2" /></S>
+)
+export const IconWall = (p) => (
+  <S {...p}><path d="M3 6h18M3 12h18M3 18h18M9 6v6M15 12v6M9 18v3M15 3v3" /></S>
+)
+export const IconHeight = (p) => (
+  <S {...p}><path d="M12 3v18M8 6l4-3 4 3M8 18l4 3 4-3" /></S>
+)

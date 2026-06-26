@@ -5,36 +5,40 @@ import Editor2D from './Editor2D.jsx'
 import Scene3D from './Scene3D.jsx'
 import Catalog from './Catalog.jsx'
 import Inspector from './Inspector.jsx'
-import RoomSheet from './RoomSheet.jsx'
+import SettingsSheet from './RoomSheet.jsx'
 import {
-  IconPlan, IconCube, IconPlus, IconRoom, IconRotate, IconCopy,
-  IconTrash, IconTune, IconUndo, IconRedo, IconShare,
+  IconPlan, IconCube, IconPlus, IconRotate, IconCopy, IconTrash, IconTune,
+  IconUndo, IconRedo, IconShare, IconCursor, IconSquare, IconWall,
 } from './Icons.jsx'
 
 export default function App() {
   const { state, dispatch, canUndo, canRedo } = useStore()
-  const { view, selected, items } = state
-  const [sheet, setSheet] = useState(null) // 'catalog' | 'room' | 'inspector'
+  const { view, selected, rooms, items, tool } = state
+  const [sheet, setSheet] = useState(null) // 'catalog' | 'settings' | 'inspector'
   const [toast, setToast] = useState(null)
 
   const flash = useCallback((msg) => setToast({ msg, t: Date.now() }), [])
-
   useEffect(() => {
     if (!toast) return
     const t = setTimeout(() => setToast(null), 1600)
     return () => clearTimeout(t)
   }, [toast])
 
-  const sel = items.find((i) => i.uid === selected) || null
-
+  const hasSel = !!selected
   useEffect(() => {
-    if (sheet === 'inspector' && !sel) setSheet(null)
-  }, [sheet, sel])
+    if (sheet === 'inspector' && !hasSel) setSheet(null)
+  }, [sheet, hasSel])
 
   const setView = (v) => dispatch({ type: 'view', view: v })
+  const setTool = (t) => dispatch({ type: 'tool', tool: t })
 
   const addKind = (kind) => {
-    dispatch({ type: 'add', kind })
+    let x = 0
+    let z = 0
+    const selRoom = selected?.type === 'room' && rooms.find((r) => r.uid === selected.uid)
+    if (selRoom) { x = selRoom.x + selRoom.w / 2; z = selRoom.z + selRoom.d / 2 }
+    else if (rooms.length) { const r = rooms[rooms.length - 1]; x = r.x + r.w / 2; z = r.z + r.d / 2 }
+    dispatch({ type: 'addItem', kind, x, z })
     setSheet(null)
     haptic(10)
     flash('Added — drag to position')
@@ -52,7 +56,7 @@ export default function App() {
         if (!svg) return
         dataUrl = await svgToPng(svg)
       }
-      await shareOrDownload(dataUrl, `atelier-room-${Date.now()}.png`)
+      await shareOrDownload(dataUrl, `honeycutt-room-${Date.now()}.png`)
       flash('Image saved')
     } catch {
       flash('Could not export')
@@ -69,7 +73,7 @@ export default function App() {
             </svg>
           </div>
           <div className="title">
-            <b>Atelier</b>
+            <b>Honeycutt</b>
             <span>Room Studio</span>
           </div>
         </div>
@@ -89,69 +93,61 @@ export default function App() {
       </header>
 
       <main className="stage">
-        {view === '2d' ? (
-          <Editor2D onSelect={(uid) => dispatch({ type: 'select', uid })} />
-        ) : (
-          <Scene3D />
+        {view === '2d' ? <Editor2D /> : <Scene3D />}
+
+        {/* tool switcher (2D only) */}
+        {view === '2d' && (
+          <div className="toolbar">
+            <button className={tool === 'select' ? 'active' : ''} onClick={() => setTool('select')}><IconCursor size={16} /> Select</button>
+            <button className={tool === 'room' ? 'active' : ''} onClick={() => setTool('room')}><IconSquare size={16} /> Room</button>
+            <button className={tool === 'wall' ? 'active' : ''} onClick={() => setTool('wall')}><IconWall size={16} /> Wall</button>
+          </div>
         )}
 
-        {/* undo / redo */}
         <div className="undo-cluster">
           <button className="tool" disabled={!canUndo} onClick={() => dispatch({ type: 'undo' })} aria-label="Undo"><IconUndo size={18} /></button>
           <button className="tool" disabled={!canRedo} onClick={() => dispatch({ type: 'redo' })} aria-label="Redo"><IconRedo size={18} /></button>
         </div>
 
-        {items.length === 0 && (
-          <div className="empty">
-            <b>Your room is empty</b>
-            <span>Tap “Add Furniture” to start designing</span>
-          </div>
-        )}
-
-        {sel && (
+        {selected && tool === 'select' && (
           <ActionBar
-            onRotate={() => { dispatch({ type: 'update', uid: sel.uid, patch: { rot: ((sel.rot || 0) + 90) % 360 } }); haptic(6) }}
-            onDup={() => { dispatch({ type: 'duplicate', uid: sel.uid }); haptic(8); flash('Duplicated') }}
+            type={selected.type}
+            onRotate={() => { if (selected.type === 'item') { const it = items.find((i) => i.uid === selected.uid); dispatch({ type: 'update', sel: selected, patch: { rot: ((it?.rot || 0) + 90) % 360 } }); haptic(6) } }}
+            onDup={() => { dispatch({ type: 'duplicate', sel: selected }); haptic(8); flash('Duplicated') }}
             onEdit={() => setSheet('inspector')}
-            onDelete={() => { dispatch({ type: 'remove', uid: sel.uid }); haptic(12); flash('Removed') }}
+            onDelete={() => { dispatch({ type: 'remove', sel: selected }); haptic(12); flash('Removed') }}
           />
         )}
       </main>
 
       <nav className="dock">
-        <button className="pill accent" onClick={() => { dispatch({ type: 'select', uid: null }); setSheet('catalog') }}>
+        <button className="pill accent" onClick={() => { dispatch({ type: 'select', sel: null }); setSheet('catalog') }}>
           <IconPlus size={19} /> Add Furniture
         </button>
-        <button className="pill" onClick={() => setSheet('room')}>
-          <IconRoom size={19} /> Room
+        <button className="pill" onClick={() => setSheet('settings')}>
+          <IconTune size={19} /> Settings
         </button>
       </nav>
 
       {toast && <div className="toast" key={toast.t}>{toast.msg}</div>}
 
       {sheet === 'catalog' && (
-        <Sheet onClose={() => setSheet(null)}>
-          <Catalog onPick={addKind} />
-        </Sheet>
+        <Sheet onClose={() => setSheet(null)}><Catalog onPick={addKind} /></Sheet>
       )}
-      {sheet === 'room' && (
-        <Sheet onClose={() => setSheet(null)}>
-          <RoomSheet onFlash={flash} onClose={() => setSheet(null)} />
-        </Sheet>
+      {sheet === 'settings' && (
+        <Sheet onClose={() => setSheet(null)}><SettingsSheet onFlash={flash} onClose={() => setSheet(null)} /></Sheet>
       )}
-      {sheet === 'inspector' && sel && (
-        <Sheet onClose={() => setSheet(null)}>
-          <Inspector item={sel} onClose={() => setSheet(null)} onFlash={flash} />
-        </Sheet>
+      {sheet === 'inspector' && selected && (
+        <Sheet onClose={() => setSheet(null)}><Inspector onClose={() => setSheet(null)} onFlash={flash} /></Sheet>
       )}
     </div>
   )
 }
 
-function ActionBar({ onRotate, onDup, onEdit, onDelete }) {
+function ActionBar({ type, onRotate, onDup, onEdit, onDelete }) {
   return (
     <div className="fab-col">
-      <button className="fab" onClick={onRotate} aria-label="Rotate"><IconRotate size={20} /></button>
+      {type === 'item' && <button className="fab" onClick={onRotate} aria-label="Rotate"><IconRotate size={20} /></button>}
       <button className="fab" onClick={onDup} aria-label="Duplicate"><IconCopy size={20} /></button>
       <button className="fab primary" onClick={onEdit} aria-label="Edit"><IconTune size={20} /></button>
       <button className="fab" onClick={onDelete} aria-label="Delete" style={{ color: 'var(--danger)' }}><IconTrash size={20} /></button>
@@ -171,7 +167,6 @@ function Sheet({ children, onClose }) {
   )
 }
 
-// ---- export helpers ----
 function svgToPng(svg) {
   return new Promise((resolve, reject) => {
     const rect = svg.getBoundingClientRect()
@@ -200,7 +195,7 @@ async function shareOrDownload(dataUrl, name) {
   const blob = await (await fetch(dataUrl)).blob()
   const file = new File([blob], name, { type: 'image/png' })
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    await navigator.share({ files: [file], title: 'My room · Atelier' })
+    await navigator.share({ files: [file], title: 'My room · Honeycutt Room Studio' })
     return
   }
   const a = document.createElement('a')

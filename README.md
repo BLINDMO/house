@@ -1,19 +1,21 @@
-# Atelier — Room Studio
+# Honeycutt Room Studio
 
-A premium, installable **PWA** for designing rooms and viewing them in **2D and 3D** — right from your phone.
+A premium, installable **PWA** for drawing rooms and walls and designing them in **2D and 3D** — right from your phone.
 
-![Atelier](public/icon-192.png)
+![Honeycutt Room Studio](public/icon-192.png)
 
 ## Features
 
-- **2D floor planner** — a clean top-down plan with a metric grid and live dimension labels.
-- **Drag to resize the room** — grab any of the 8 handles (corners + edges) and pull, just like a home-design app. Furniture stays anchored inside the walls.
-- **Drag to arrange** — move any piece with a finger; rotate, duplicate, recolour, or delete from the contextual controls.
-- **One-tap 3D view** — the exact same layout rendered as a real 3D room with a wood floor, soft shadows, and walls that auto-hide so you can always see inside. Orbit and pinch-zoom to walk around it.
+- **Start from a blank canvas** — an infinite, pannable/pinch-zoomable grid. Nothing is preset.
+- **Draw rooms & walls** — the **Room** tool drags out a rectangular room; the **Wall** tool draws standalone partition walls. Everything snaps to a grid.
+- **Adjustable wall height** — set a default for new rooms/walls in Settings, or select any room/wall and change its height (and thickness) individually.
+- **Drag to arrange anywhere** — move any piece with a finger, in or out of a room (no clamping); rotate, duplicate, recolour, or delete from the contextual controls.
+- **Click-and-drag resizing** — select a piece and pull its corner handles; a live badge shows the footprint in feet (toggle to metres in Settings).
+- **One-tap 3D view** — the same plan rendered as real 3D rooms with wood floors, soft shadows, and walls that auto-hide so you can always see inside. Orbit, pan and pinch-zoom.
+- **Easy 3D rotation** — a drag-to-rotate ring gizmo appears around the selected piece.
+- **Ambiance** — Day / Dusk / Night lighting presets.
 - **27 preloaded pieces** — sofas, beds, tables, storage, plants, lighting, kitchen and more. Everything is **procedurally generated**, so there are no asset downloads and the app works fully **offline**.
-- **Premium feel** — dark champagne-gold theme, glass bottom sheets, smooth motion, safe-area aware, designed for touch.
-- **Auto-save** — your design persists locally between visits.
-- **Installable** — add it to your home screen and it launches like a native app.
+- **Undo/redo, image export/share, auto-save, installable** — a premium dark champagne-gold, touch-first UI.
 
 ## Tech
 
