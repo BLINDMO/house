@@ -1,8 +1,9 @@
 import React from 'react'
 import { useStore } from '../store.jsx'
-import { CATALOG_BY_TYPE, PALETTE } from '../data/catalog.js'
+import { CATALOG_BY_TYPE } from '../data/catalog.js'
 import { effDims, formatLen } from '../util.js'
 import { IconRotate, IconCopy, IconTrash } from './Icons.jsx'
+import FinishPicker from './FinishPicker.jsx'
 
 function Slider({ label, value, min, max, step, onChange, display }) {
   return (
@@ -38,10 +39,8 @@ export default function Inspector({ onClose, onFlash }) {
         <div className="insp">
           <div className="row" style={{ alignItems: 'flex-start' }}>
             <div className="label">Colour</div>
-            <div className="swatches" style={{ marginLeft: 'auto', maxWidth: '70%', justifyContent: 'flex-end' }}>
-              {PALETTE.map((p) => (
-                <button key={p} className={`swatch ${(item.color || c.color) === p ? 'active' : ''}`} style={{ background: p }} onClick={() => set({ color: p })} aria-label={`Colour ${p}`} />
-              ))}
+            <div style={{ marginLeft: 'auto', maxWidth: '74%' }}>
+              <FinishPicker value={{ color: item.color || c.color }} allowTexture={false} onChange={(f) => set({ color: f.color })} />
             </div>
           </div>
           <Slider label="Size" value={avg} min={30} max={300} step={1}
@@ -83,7 +82,7 @@ export default function Inspector({ onClose, onFlash }) {
           <Slider label="Wall height" value={room.height} min={1.5} max={6} step={0.1} onChange={(v) => set({ height: v }, `rh:${room.uid}`)} display={formatLen(room.height, units)} />
           <div className="row"><div className="label">Floor area</div><div className="val">{units === 'm' ? `${area.toFixed(1)} m²` : `${Math.round(area * 10.7639)} ft²`}</div></div>
           <div className="row">
-            <div className="label">Walls</div>
+            <div className="label">Wall sides</div>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
               {[['n', 'N'], ['e', 'E'], ['s', 'S'], ['w', 'W']].map(([side, lbl]) => {
                 const on = !room.wallsOn || room.wallsOn[side] !== false
@@ -92,6 +91,18 @@ export default function Inspector({ onClose, onFlash }) {
                     onClick={() => set({ wallsOn: { ...(room.wallsOn || {}), [side]: !on } })}>{lbl}</button>
                 )
               })}
+            </div>
+          </div>
+          <div className="row" style={{ alignItems: 'flex-start' }}>
+            <div className="label">Flooring</div>
+            <div style={{ marginLeft: 'auto', maxWidth: '74%' }}>
+              <FinishPicker value={{ color: room.floorColor, tex: room.floorTex }} onChange={(f) => set({ floorColor: f.color, floorTex: f.tex })} />
+            </div>
+          </div>
+          <div className="row" style={{ alignItems: 'flex-start' }}>
+            <div className="label">Wall finish</div>
+            <div style={{ marginLeft: 'auto', maxWidth: '74%' }}>
+              <FinishPicker value={{ color: room.wallColor, tex: room.wallTex }} onChange={(f) => set({ wallColor: f.color, wallTex: f.tex })} />
             </div>
           </div>
           <div className="btn-row">
@@ -117,10 +128,8 @@ export default function Inspector({ onClose, onFlash }) {
             <Slider label="Depth" value={b.depth} min={0.02} max={0.6} step={0.01} onChange={(v) => set({ depth: v }, `bd:${b.uid}`)} display={formatLen(b.depth, units)} />
             <div className="row" style={{ alignItems: 'flex-start' }}>
               <div className="label">Finish</div>
-              <div className="swatches" style={{ marginLeft: 'auto', maxWidth: '70%', justifyContent: 'flex-end' }}>
-                {PALETTE.map((p) => (
-                  <button key={p} className={`swatch ${b.color === p ? 'active' : ''}`} style={{ background: p }} onClick={() => set({ color: p, tex: undefined })} aria-label={`Colour ${p}`} />
-                ))}
+              <div style={{ marginLeft: 'auto', maxWidth: '74%' }}>
+                <FinishPicker value={{ color: b.color, tex: b.tex }} onChange={(f) => set({ color: f.color, tex: f.tex })} />
               </div>
             </div>
             <div className="btn-row">
@@ -147,11 +156,9 @@ export default function Inspector({ onClose, onFlash }) {
           <Slider label="Height" value={b.h} min={0.1} max={6} step={0.05} onChange={(v) => set({ h: v }, `bh:${b.uid}`)} display={formatLen(b.h, units)} />
           <Slider label="Depth" value={b.depth} min={0.05} max={3} step={0.05} onChange={(v) => set({ depth: v }, `bd:${b.uid}`)} display={formatLen(b.depth, units)} />
           <div className="row" style={{ alignItems: 'flex-start' }}>
-            <div className="label">Colour</div>
-            <div className="swatches" style={{ marginLeft: 'auto', maxWidth: '70%', justifyContent: 'flex-end' }}>
-              {PALETTE.map((p) => (
-                <button key={p} className={`swatch ${b.color === p ? 'active' : ''}`} style={{ background: p }} onClick={() => set({ color: p })} aria-label={`Colour ${p}`} />
-              ))}
+            <div className="label">Finish</div>
+            <div style={{ marginLeft: 'auto', maxWidth: '74%' }}>
+              <FinishPicker value={{ color: b.color, tex: b.tex }} onChange={(f) => set({ color: f.color, tex: f.tex })} />
             </div>
           </div>
           <div className="btn-row">

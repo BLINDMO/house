@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useStore } from '../store.jsx'
 import { formatLen } from '../util.js'
 import { wallGeometry, listWalls, refEq } from '../wall.js'
-import { IconCursor, IconSquare, IconWall, IconCenter } from './Icons.jsx'
+import { IconCursor, IconSquare, IconWall, IconCenter, IconLayers } from './Icons.jsx'
 
 const ACCENT = '#d9b779'
 const GRID = 0.05
@@ -422,7 +422,7 @@ export default function ElevationEditor() {
         <button className={eTool === 'select' ? 'active' : ''} onClick={() => setETool('select')}><IconCursor size={16} /> Select</button>
         <button className={eTool === 'box' ? 'active' : ''} onClick={() => setETool('box')}><IconSquare size={16} /> Box</button>
         <button className={eTool === 'line' ? 'active' : ''} onClick={() => setETool('line')}><IconWall size={16} /> Board</button>
-        <button className={menu ? 'active' : ''} onClick={() => setMenu((m) => !m)}>✨ Presets</button>
+        <button className={menu ? 'active' : ''} onClick={() => setMenu((m) => !m)}><IconLayers size={16} /> Presets</button>
       </div>
 
       {menu && (
@@ -439,7 +439,7 @@ export default function ElevationEditor() {
         {eTool === 'box' ? 'Drag to add a box or cubby'
           : eTool === 'line' ? 'Drag to draw a wood board / slat'
           : selMine ? 'Drag to move · drag handles to resize · edit for depth & finish'
-          : 'Tap a piece to select · ‹ › switches walls · ✨ for presets'}
+          : 'Tap a piece to select · ‹ › switches walls · Presets for kits'}
       </div>
     </div>
   )

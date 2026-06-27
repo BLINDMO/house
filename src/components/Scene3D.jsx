@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { useStore } from '../store.jsx'
+import { useAssets } from '../assets.jsx'
 import { CATALOG_BY_TYPE } from '../data/catalog.js'
 import { haptic, effDims } from '../util.js'
 import { wallGeometry } from '../wall.js'
@@ -15,22 +16,30 @@ const AMBIANCE = {
   night: { bg: '#080a0f', exposure: 1.18, env: 0.18, key: ['#9fb6ff', 0.5], fill: ['#4a5fb0', 0.3], hemi: 0.14, amb: 0.08 },
 }
 const snap = (v, g) => Math.round(v / g) * g
+const clamp8 = (v) => Math.max(0, Math.min(255, Math.round(v)))
+const WOOD_BASE = { oak: '#c79a6b', walnut: '#6e4a30', birch: '#d8c7a3', grey: '#9a9a92' }
 
-function woodTexture() {
+function woodTexture(baseHex = '#b08a5e') {
+  const col = new THREE.Color(baseHex)
+  const br = col.r * 255
+  const bg = col.g * 255
+  const bb = col.b * 255
   const c = document.createElement('canvas')
   c.width = 512; c.height = 512
   const g = c.getContext('2d')
-  g.fillStyle = '#b08a5e'; g.fillRect(0, 0, 512, 512)
+  g.fillStyle = baseHex; g.fillRect(0, 0, 512, 512)
   const planks = 6; const ph = 512 / planks
   for (let i = 0; i < planks; i++) {
-    const base = 150 + Math.floor(Math.random() * 30)
-    g.fillStyle = `rgb(${base + 20},${base - 10},${base - 50})`; g.fillRect(0, i * ph, 512, ph)
+    const d = (Math.random() - 0.5) * 36
+    g.fillStyle = `rgb(${clamp8(br + d)},${clamp8(bg + d)},${clamp8(bb + d)})`
+    g.fillRect(0, i * ph, 512, ph)
     for (let k = 0; k < 60; k++) {
-      g.strokeStyle = `rgba(90,60,35,${0.04 + Math.random() * 0.06})`; g.lineWidth = 1
+      g.strokeStyle = `rgba(${clamp8(br * 0.45)},${clamp8(bg * 0.4)},${clamp8(bb * 0.35)},${0.04 + Math.random() * 0.06})`
+      g.lineWidth = 1
       g.beginPath(); const y = i * ph + Math.random() * ph
       g.moveTo(0, y); g.bezierCurveTo(170, y + (Math.random() - 0.5) * 6, 340, y + (Math.random() - 0.5) * 6, 512, y); g.stroke()
     }
-    g.fillStyle = 'rgba(40,25,15,0.5)'; g.fillRect(0, i * ph, 512, 2)
+    g.fillStyle = 'rgba(28,16,8,0.45)'; g.fillRect(0, i * ph, 512, 2)
   }
   const tex = new THREE.CanvasTexture(c)
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping
@@ -41,10 +50,52 @@ function woodTexture() {
 export default function Scene3D() {
   const { state, dispatch } = useStore()
   const { rooms, walls, items, builtins, selected, ambiance } = state
+  const { map: assetMap } = useAssets()
   const mountRef = useRef(null)
   const refs = useRef({})
   const live = useRef({})
   live.current = { rooms, walls, items, selected, dispatch }
+
+  // resolve a finish "tex" string to a cached base texture, or null for solid colour
+  function finishBase(tex) {
+    const r = refs.current
+    if (!tex || typeof tex !== 'string') return null
+    if (tex.startsWith('wood:')) {
+      const v = tex.slice(5)
+      if (!r.woodCache.has(v)) r.woodCache.set(v, woodTexture(WOOD_BASE[v] || '#c79a6b'))
+      return r.woodCache.get(v)
+    }
+    if (tex.startsWith('img:')) {
+      const id = tex.slice(4)
+      if (!r.imgCache.has(id)) {
+        const d = assetMap[id]
+        if (!d) return null
+        const t = new THREE.TextureLoader().load(d)
+        t.colorSpace = THREE.SRGBColorSpace
+        t.wrapS = t.wrapT = THREE.RepeatWrapping
+        r.imgCache.set(id, t)
+      }
+      return r.imgCache.get(id)
+    }
+    return null
+  }
+  // build a material for a finish {tex, color} with a desired tile size (metres)
+  function finishMaterial(tex, color, fallback, repU, repV, extra = {}) {
+    const base = finishBase(tex)
+    if (base) {
+      let t = base
+      if (base.image instanceof HTMLCanvasElement) {
+        t = base.clone()
+        t.needsUpdate = true
+        t.wrapS = t.wrapT = THREE.RepeatWrapping
+        t.colorSpace = THREE.SRGBColorSpace
+        refs.current.roomTexList.push(t)
+      }
+      t.repeat.set(Math.max(1, repU), Math.max(1, repV))
+      return new THREE.MeshStandardMaterial({ map: t, ...extra })
+    }
+    return new THREE.MeshStandardMaterial({ color: new THREE.Color(color || fallback), ...extra })
+  }
 
   // ---- init ----
   useEffect(() => {
@@ -140,7 +191,7 @@ export default function Scene3D() {
     Object.assign(refs.current, {
       renderer, scene, camera, controls, roomGroup, furnitureGroup,
       key, fill, ambient, hemi, pmrem, ring, gizmo, builtinGroup,
-      wood: woodTexture(), walls: [], itemMap: new Map(), framed: false,
+      woodCache: new Map(), imgCache: new Map(), roomTexList: [], walls: [], itemMap: new Map(), framed: false,
       raycaster: new THREE.Raycaster(), drag: null, rotate: null, pending: null,
     })
 
@@ -256,7 +307,10 @@ export default function Scene3D() {
       controls.dispose()
       disposeGroup(roomGroup); disposeGroup(furnitureGroup); disposeGroup(builtinGroup)
       ring.geometry.dispose(); ring.material.dispose()
-      refs.current.wood?.dispose(); pmrem.dispose(); renderer.dispose()
+      refs.current.woodCache.forEach((t) => t.dispose())
+      refs.current.imgCache.forEach((t) => t.dispose())
+      refs.current.roomTexList.forEach((t) => t.dispose())
+      pmrem.dispose(); renderer.dispose()
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement)
     }
   }, [])
@@ -280,12 +334,13 @@ export default function Scene3D() {
     const r = refs.current
     if (!r.roomGroup) return
     disposeGroup(r.roomGroup); r.roomGroup.clear(); r.walls = []
-    const wallMat = new THREE.MeshStandardMaterial({ color: '#e8e3da', roughness: 0.95, side: THREE.DoubleSide })
+    r.roomTexList.forEach((tx) => tx.dispose()); r.roomTexList = []
     const skirtMat = new THREE.MeshStandardMaterial({ color: '#cfc7ba', roughness: 0.8 })
+    const freeWallMat = new THREE.MeshStandardMaterial({ color: '#e8e3da', roughness: 0.95, side: THREE.DoubleSide })
     const t = 0.1
 
-    const addWallBox = (w, h, d, cx, cy, cz, nx, nz, hideable) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat)
+    const addWallBox = (mat, w, h, d, cx, cy, cz, nx, nz, hideable) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat)
       m.position.set(cx, cy, cz)
       m.castShadow = true; m.receiveShadow = true
       r.roomGroup.add(m)
@@ -296,30 +351,27 @@ export default function Scene3D() {
       const { x, z, w, d, height } = room
       const cx = x + w / 2
       const cz = z + d / 2
-      const wood = r.wood.clone()
-      wood.wrapS = wood.wrapT = THREE.RepeatWrapping
-      wood.repeat.set(Math.max(1, w / 1.5), Math.max(1, d / 1.5))
-      wood.colorSpace = THREE.SRGBColorSpace
-      wood.needsUpdate = true
-      const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshStandardMaterial({ map: wood, roughness: 0.65, metalness: 0.02 }))
+      const ftex = room.floorTex || (room.floorColor ? undefined : 'wood:oak')
+      const floorMat = finishMaterial(ftex, room.floorColor, '#b08a5e', w / 1.5, d / 1.5, { roughness: 0.65, metalness: 0.02 })
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), floorMat)
       floor.rotation.x = -Math.PI / 2; floor.position.set(cx, 0, cz); floor.receiveShadow = true
       r.roomGroup.add(floor)
-      // 4 walls (skip sides that have been deleted to create openings)
+      const wallMat = finishMaterial(room.wallTex, room.wallColor, '#e8e3da', w / 1.2, height / 1.2, { roughness: 0.95, side: THREE.DoubleSide })
       const on = (s) => !room.wallsOn || room.wallsOn[s] !== false
       const skirt = (geo, px, pz) => { const m = new THREE.Mesh(geo, skirtMat); m.position.set(px, 0.045, pz); r.roomGroup.add(m) }
       // Walls are centred on the room edges so neighbouring rooms share the
       // same wall line (clean joins) instead of leaving a double-wall gap.
-      if (on('n')) { addWallBox(w + t, height, t, cx, height / 2, z, 0, -1, true); skirt(new THREE.BoxGeometry(w - t, 0.09, 0.04), cx, z + t / 2 + 0.02) }
-      if (on('s')) { addWallBox(w + t, height, t, cx, height / 2, z + d, 0, 1, true); skirt(new THREE.BoxGeometry(w - t, 0.09, 0.04), cx, z + d - t / 2 - 0.02) }
-      if (on('w')) { addWallBox(t, height, d + t, x, height / 2, cz, -1, 0, true); skirt(new THREE.BoxGeometry(0.04, 0.09, d - t), x + t / 2 + 0.02, cz) }
-      if (on('e')) { addWallBox(t, height, d + t, x + w, height / 2, cz, 1, 0, true); skirt(new THREE.BoxGeometry(0.04, 0.09, d - t), x + w - t / 2 - 0.02, cz) }
+      if (on('n')) { addWallBox(wallMat, w + t, height, t, cx, height / 2, z, 0, -1, true); skirt(new THREE.BoxGeometry(w - t, 0.09, 0.04), cx, z + t / 2 + 0.02) }
+      if (on('s')) { addWallBox(wallMat, w + t, height, t, cx, height / 2, z + d, 0, 1, true); skirt(new THREE.BoxGeometry(w - t, 0.09, 0.04), cx, z + d - t / 2 - 0.02) }
+      if (on('w')) { addWallBox(wallMat, t, height, d + t, x, height / 2, cz, -1, 0, true); skirt(new THREE.BoxGeometry(0.04, 0.09, d - t), x + t / 2 + 0.02, cz) }
+      if (on('e')) { addWallBox(wallMat, t, height, d + t, x + w, height / 2, cz, 1, 0, true); skirt(new THREE.BoxGeometry(0.04, 0.09, d - t), x + w - t / 2 - 0.02, cz) }
     }
 
     // free walls (always visible)
     for (const wl of walls) {
       const len = Math.hypot(wl.x2 - wl.x1, wl.z2 - wl.z1)
       if (len < 1e-3) continue
-      const m = new THREE.Mesh(new THREE.BoxGeometry(len, wl.height, wl.thickness), wallMat)
+      const m = new THREE.Mesh(new THREE.BoxGeometry(len, wl.height, wl.thickness), freeWallMat)
       m.position.set((wl.x1 + wl.x2) / 2, wl.height / 2, (wl.z1 + wl.z2) / 2)
       m.rotation.y = -Math.atan2(wl.z2 - wl.z1, wl.x2 - wl.x1)
       m.castShadow = true; m.receiveShadow = true
@@ -329,7 +381,7 @@ export default function Scene3D() {
     if (!r.framed && (rooms.length || walls.length || items.length)) {
       reframe(); r.framed = true
     }
-  }, [rooms, walls])
+  }, [rooms, walls, assetMap])
 
   // ---- furniture diff + selection ring/gizmo ----
   useEffect(() => {
@@ -378,7 +430,10 @@ export default function Scene3D() {
     for (const b of builtins) {
       const geom = wallGeometry(b.wall, rooms, walls)
       if (!geom) continue
-      const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(b.color || '#c7ad84'), roughness: 0.62, metalness: 0.04 })
+      const base = finishBase(b.tex)
+      const mat = base
+        ? new THREE.MeshStandardMaterial({ map: base, roughness: 0.6, metalness: 0.04 })
+        : new THREE.MeshStandardMaterial({ color: new THREE.Color(b.color || '#c7ad84'), roughness: 0.62, metalness: 0.04 })
 
       // board / slat: a thin beam between two points in the wall plane
       if (b.kind === 'board') {
@@ -435,7 +490,7 @@ export default function Scene3D() {
       }
       r.builtinGroup.add(node)
     }
-  }, [builtins, rooms, walls])
+  }, [builtins, rooms, walls, assetMap])
 
   function reframe() {
     const r = refs.current

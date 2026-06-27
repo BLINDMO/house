@@ -11,7 +11,8 @@ A premium, installable **PWA** for drawing rooms and walls and designing them in
 - **Adjustable wall height** — set a default for new rooms/walls in Settings, or select any room/wall and change its height (and thickness) individually.
 - **Drag to arrange anywhere** — move any piece with a finger, in or out of a room (no clamping); rotate, duplicate, recolour, or delete from the contextual controls.
 - **Click-and-drag resizing** — select a piece and pull its corner handles; a live badge shows the footprint in feet (toggle to metres in Settings).
-- **Side (elevation) view** — pick any wall and design built-ins against it: drag out boxes and open cubbies (with width / height / depth in feet) to build bunk beds, cubby walls or kitchen cabinetry. A floor line, height ruler and scale figure keep it readable; everything appears in 3D.
+- **Side (elevation) view** — pick any wall and design built-ins against it: drag out boxes / open cubbies, draw individual **wood boards** with the Board tool, or drop a **preset** (bunk bed, base & upper cabinets, cubby wall, wardrobe). A floor line and height ruler keep it readable; everything appears in 3D.
+- **Custom finishes & assets** — solid colors, a custom color picker, procedural **wood** finishes (oak / walnut / birch / grey), and **your own uploaded images** (download a free wood/flooring/wallpaper texture and plug it in). Apply finishes to flooring, walls, built-ins and furniture. Uploads are stored locally (IndexedDB) so they persist offline.
 - **Clean room joins** — rooms snap to each other's edges and share wall lines, so adjacent rooms meet cleanly.
 - **One-tap 3D view** — the same plan rendered as real 3D rooms with wood floors, soft shadows, and walls that auto-hide so you can always see inside. Orbit, pan and pinch-zoom.
 - **Easy 3D rotation** — a drag-to-rotate ring gizmo appears around the selected piece.
