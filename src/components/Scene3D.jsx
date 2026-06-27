@@ -5,6 +5,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { useStore } from '../store.jsx'
 import { CATALOG_BY_TYPE } from '../data/catalog.js'
 import { haptic, effDims } from '../util.js'
+import { wallGeometry } from '../wall.js'
 import { buildItem, disposeGroup } from '../three/furniture.js'
 import { IconCenter } from './Icons.jsx'
 
@@ -39,7 +40,7 @@ function woodTexture() {
 
 export default function Scene3D() {
   const { state, dispatch } = useStore()
-  const { rooms, walls, items, selected, ambiance } = state
+  const { rooms, walls, items, builtins, selected, ambiance } = state
   const mountRef = useRef(null)
   const refs = useRef({})
   const live = useRef({})
@@ -105,7 +106,8 @@ export default function Scene3D() {
 
     const roomGroup = new THREE.Group()
     const furnitureGroup = new THREE.Group()
-    scene.add(roomGroup, furnitureGroup)
+    const builtinGroup = new THREE.Group()
+    scene.add(roomGroup, furnitureGroup, builtinGroup)
 
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(0.46, 0.5, 48),
@@ -137,7 +139,7 @@ export default function Scene3D() {
 
     Object.assign(refs.current, {
       renderer, scene, camera, controls, roomGroup, furnitureGroup,
-      key, fill, ambient, hemi, pmrem, ring, gizmo,
+      key, fill, ambient, hemi, pmrem, ring, gizmo, builtinGroup,
       wood: woodTexture(), walls: [], itemMap: new Map(), framed: false,
       raycaster: new THREE.Raycaster(), drag: null, rotate: null, pending: null,
     })
@@ -252,7 +254,7 @@ export default function Scene3D() {
       dom.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       controls.dispose()
-      disposeGroup(roomGroup); disposeGroup(furnitureGroup)
+      disposeGroup(roomGroup); disposeGroup(furnitureGroup); disposeGroup(builtinGroup)
       ring.geometry.dispose(); ring.material.dispose()
       refs.current.wood?.dispose(); pmrem.dispose(); renderer.dispose()
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement)
@@ -305,10 +307,12 @@ export default function Scene3D() {
       // 4 walls (skip sides that have been deleted to create openings)
       const on = (s) => !room.wallsOn || room.wallsOn[s] !== false
       const skirt = (geo, px, pz) => { const m = new THREE.Mesh(geo, skirtMat); m.position.set(px, 0.045, pz); r.roomGroup.add(m) }
-      if (on('n')) { addWallBox(w + t, height, t, cx, height / 2, z - t / 2, 0, -1, true); skirt(new THREE.BoxGeometry(w, 0.09, 0.04), cx, z + 0.02) }
-      if (on('s')) { addWallBox(w + t, height, t, cx, height / 2, z + d + t / 2, 0, 1, true); skirt(new THREE.BoxGeometry(w, 0.09, 0.04), cx, z + d - 0.02) }
-      if (on('w')) { addWallBox(t, height, d + t, x - t / 2, height / 2, cz, -1, 0, true); skirt(new THREE.BoxGeometry(0.04, 0.09, d), x + 0.02, cz) }
-      if (on('e')) { addWallBox(t, height, d + t, x + w + t / 2, height / 2, cz, 1, 0, true); skirt(new THREE.BoxGeometry(0.04, 0.09, d), x + w - 0.02, cz) }
+      // Walls are centred on the room edges so neighbouring rooms share the
+      // same wall line (clean joins) instead of leaving a double-wall gap.
+      if (on('n')) { addWallBox(w + t, height, t, cx, height / 2, z, 0, -1, true); skirt(new THREE.BoxGeometry(w - t, 0.09, 0.04), cx, z + t / 2 + 0.02) }
+      if (on('s')) { addWallBox(w + t, height, t, cx, height / 2, z + d, 0, 1, true); skirt(new THREE.BoxGeometry(w - t, 0.09, 0.04), cx, z + d - t / 2 - 0.02) }
+      if (on('w')) { addWallBox(t, height, d + t, x, height / 2, cz, -1, 0, true); skirt(new THREE.BoxGeometry(0.04, 0.09, d - t), x + t / 2 + 0.02, cz) }
+      if (on('e')) { addWallBox(t, height, d + t, x + w, height / 2, cz, 1, 0, true); skirt(new THREE.BoxGeometry(0.04, 0.09, d - t), x + w - t / 2 - 0.02, cz) }
     }
 
     // free walls (always visible)
@@ -363,6 +367,51 @@ export default function Scene3D() {
       r.ring.visible = false; r.gizmo.visible = false
     }
   }, [items, selected])
+
+  // ---- built-ins (elevation modules) ----
+  useEffect(() => {
+    const r = refs.current
+    if (!r.builtinGroup) return
+    disposeGroup(r.builtinGroup)
+    r.builtinGroup.clear()
+    const thk = 0.03
+    for (const b of builtins) {
+      const geom = wallGeometry(b.wall, rooms, walls)
+      if (!geom) continue
+      const M = new THREE.Matrix4()
+      const dir = new THREE.Vector3(geom.dirx, 0, geom.dirz)
+      const up = new THREE.Vector3(0, 1, 0)
+      const nrm = new THREE.Vector3(geom.nx, 0, geom.nz)
+      M.makeBasis(dir, up, nrm)
+      const along = b.u + b.w / 2
+      M.setPosition(
+        geom.ox + geom.dirx * along + geom.nx * (b.depth / 2),
+        b.v + b.h / 2,
+        geom.oz + geom.dirz * along + geom.nz * (b.depth / 2)
+      )
+      const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(b.color || '#c7ad84'), roughness: 0.62, metalness: 0.04 })
+      const node = new THREE.Group()
+      node.matrixAutoUpdate = false
+      node.matrix.copy(M)
+      const addBox = (w, h, d, x, y, z) => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat)
+        m.position.set(x, y, z)
+        m.castShadow = true
+        m.receiveShadow = true
+        node.add(m)
+      }
+      if (b.kind === 'cubby') {
+        addBox(b.w, b.h, thk, 0, 0, -b.depth / 2 + thk / 2) // back
+        addBox(b.w, thk, b.depth, 0, b.h / 2 - thk / 2, 0) // top
+        addBox(b.w, thk, b.depth, 0, -b.h / 2 + thk / 2, 0) // bottom
+        addBox(thk, b.h, b.depth, -b.w / 2 + thk / 2, 0, 0) // left
+        addBox(thk, b.h, b.depth, b.w / 2 - thk / 2, 0, 0) // right
+      } else {
+        addBox(b.w, b.h, b.depth, 0, 0, 0)
+      }
+      r.builtinGroup.add(node)
+    }
+  }, [builtins, rooms, walls])
 
   function reframe() {
     const r = refs.current

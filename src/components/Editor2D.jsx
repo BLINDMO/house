@@ -174,6 +174,26 @@ export default function Editor2D() {
     return { kind: 'empty' }
   }
 
+  // snap a coordinate to nearby room edges, falling back to the grid
+  function edgeTargets(exceptUid) {
+    const xs = []
+    const zs = []
+    for (const r of rooms) {
+      if (r.uid === exceptUid) continue
+      xs.push(r.x, r.x + r.w)
+      zs.push(r.z, r.z + r.d)
+    }
+    return { xs, zs }
+  }
+  function snapEdge(v, targets, thr = 0.28) {
+    let best = null
+    let bd = thr
+    for (const t of targets) { const d = Math.abs(v - t); if (d < bd) { bd = d; best = t } }
+    return best
+  }
+  const snapX = (v, except) => { const t = snapEdge(v, edgeTargets(except).xs); return t != null ? t : snap(v, GRID) }
+  const snapZ = (v, except) => { const t = snapEdge(v, edgeTargets(except).zs); return t != null ? t : snap(v, GRID) }
+
   const onDown = (e) => {
     const [px, py] = ptr(e)
     pointers.current.set(e.pointerId, { x: px, y: py })
@@ -193,12 +213,14 @@ export default function Editor2D() {
 
     const [wx, wz] = toWorld(px, py)
     if (tool === 'room') {
-      setGesture({ kind: 'drawRoom', x0: snap(wx, GRID), z0: snap(wz, GRID), cur: { x: snap(wx, GRID), z: snap(wz, GRID), w: 0, d: 0 } })
+      const x0 = snapX(wx)
+      const z0 = snapZ(wz)
+      setGesture({ kind: 'drawRoom', x0, z0, cur: { x: x0, z: z0, w: 0, d: 0 } })
       return
     }
     if (tool === 'wall') {
-      const sx = snap(wx, GRID)
-      const sz = snap(wz, GRID)
+      const sx = snapX(wx)
+      const sz = snapZ(wz)
       setGesture({ kind: 'drawWall', x1: sx, z1: sz, cur: { x1: sx, z1: sz, x2: sx, z2: sz } })
       return
     }
@@ -264,11 +286,11 @@ export default function Editor2D() {
       if (!g.moved && Math.hypot(px - g.sx, py - g.sy) > 4) g.moved = true
       setXf((s) => ({ ...s, panX: g.panX + (px - g.sx), panY: g.panY + (py - g.sy) }))
     } else if (g.kind === 'drawRoom') {
-      const x1 = snap(wx, GRID)
-      const z1 = snap(wz, GRID)
+      const x1 = snapX(wx)
+      const z1 = snapZ(wz)
       setGesture((s) => ({ ...s, cur: { x: Math.min(s.x0, x1), z: Math.min(s.z0, z1), w: Math.abs(x1 - s.x0), d: Math.abs(z1 - s.z0) } }))
     } else if (g.kind === 'drawWall') {
-      setGesture((s) => ({ ...s, cur: { x1: s.x1, z1: s.z1, x2: snap(wx, GRID), z2: snap(wz, GRID) } }))
+      setGesture((s) => ({ ...s, cur: { x1: s.x1, z1: s.z1, x2: snapX(wx), z2: snapZ(wz) } }))
     } else if (g.kind === 'moveItem') {
       dispatch({ type: 'update', sel: { type: 'item', uid: g.uid }, patch: { x: snap(wx - g.ox, ITEM_GRID), z: snap(wz - g.oz, ITEM_GRID) }, mergeKey: `mv:${g.uid}` })
     } else if (g.kind === 'resizeItem') {
@@ -282,18 +304,35 @@ export default function Editor2D() {
       const sy = clampV(Math.sqrt(sx * sz), 0.3, 3)
       dispatch({ type: 'update', sel: { type: 'item', uid: g.uid }, patch: { scale: { x: sx, y: sy, z: sz } }, mergeKey: `sz:${g.uid}` })
     } else if (g.kind === 'moveRoom') {
-      dispatch({ type: 'update', sel: { type: 'room', uid: g.uid }, patch: { x: snap(wx - g.ox, GRID), z: snap(wz - g.oz, GRID) }, mergeKey: `mv:${g.uid}` })
+      const r = rooms.find((o) => o.uid === g.uid)
+      let left = wx - g.ox
+      let top = wz - g.oz
+      if (r) {
+        const { xs, zs } = edgeTargets(g.uid)
+        const sl = snapEdge(left, xs)
+        const sr = snapEdge(left + r.w, xs)
+        if (sl != null && (sr == null || Math.abs(left - sl) <= Math.abs(left + r.w - sr))) left = sl
+        else if (sr != null) left = sr - r.w
+        else left = snap(left, GRID)
+        const st = snapEdge(top, zs)
+        const sb = snapEdge(top + r.d, zs)
+        if (st != null && (sb == null || Math.abs(top - st) <= Math.abs(top + r.d - sb))) top = st
+        else if (sb != null) top = sb - r.d
+        else top = snap(top, GRID)
+      }
+      dispatch({ type: 'update', sel: { type: 'room', uid: g.uid }, patch: { x: left, z: top }, mergeKey: `mv:${g.uid}` })
     } else if (g.kind === 'resizeRoom') {
       let left = g.x0
       let top = g.z0
       let right = g.x0 + g.w0
       let bottom = g.z0 + g.d0
-      const hx = snap(wx, GRID)
-      const hz = snap(wz, GRID)
-      if (g.handle.includes('e')) right = Math.max(left + 0.5, hx)
-      if (g.handle.includes('w')) left = Math.min(right - 0.5, hx)
-      if (g.handle.includes('s')) bottom = Math.max(top + 0.5, hz)
-      if (g.handle.includes('n')) top = Math.min(bottom - 0.5, hz)
+      const { xs, zs } = edgeTargets(g.uid)
+      const sX = (v) => { const t = snapEdge(v, xs); return t != null ? t : snap(v, GRID) }
+      const sZ = (v) => { const t = snapEdge(v, zs); return t != null ? t : snap(v, GRID) }
+      if (g.handle.includes('e')) right = Math.max(left + 0.5, sX(wx))
+      if (g.handle.includes('w')) left = Math.min(right - 0.5, sX(wx))
+      if (g.handle.includes('s')) bottom = Math.max(top + 0.5, sZ(wz))
+      if (g.handle.includes('n')) top = Math.min(bottom - 0.5, sZ(wz))
       dispatch({ type: 'update', sel: { type: 'room', uid: g.uid }, patch: { x: left, z: top, w: right - left, d: bottom - top }, mergeKey: `rs:${g.uid}` })
     } else if (g.kind === 'moveWall') {
       const dx = snap(wx - g.ox, GRID)

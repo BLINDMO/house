@@ -11,6 +11,8 @@ A premium, installable **PWA** for drawing rooms and walls and designing them in
 - **Adjustable wall height** — set a default for new rooms/walls in Settings, or select any room/wall and change its height (and thickness) individually.
 - **Drag to arrange anywhere** — move any piece with a finger, in or out of a room (no clamping); rotate, duplicate, recolour, or delete from the contextual controls.
 - **Click-and-drag resizing** — select a piece and pull its corner handles; a live badge shows the footprint in feet (toggle to metres in Settings).
+- **Side (elevation) view** — pick any wall and design built-ins against it: drag out boxes and open cubbies (with width / height / depth in feet) to build bunk beds, cubby walls or kitchen cabinetry. A floor line, height ruler and scale figure keep it readable; everything appears in 3D.
+- **Clean room joins** — rooms snap to each other's edges and share wall lines, so adjacent rooms meet cleanly.
 - **One-tap 3D view** — the same plan rendered as real 3D rooms with wood floors, soft shadows, and walls that auto-hide so you can always see inside. Orbit, pan and pinch-zoom.
 - **Easy 3D rotation** — a drag-to-rotate ring gizmo appears around the selected piece.
 - **Ambiance** — Day / Dusk / Night lighting presets.

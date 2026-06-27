@@ -17,7 +17,7 @@ function Slider({ label, value, min, max, step, onChange, display }) {
 
 export default function Inspector({ onClose, onFlash }) {
   const { state, dispatch } = useStore()
-  const { selected, units, items, rooms, walls } = state
+  const { selected, units, items, rooms, walls, builtins } = state
   if (!selected) return null
 
   const sel = selected
@@ -92,6 +92,41 @@ export default function Inspector({ onClose, onFlash }) {
                     onClick={() => set({ wallsOn: { ...(room.wallsOn || {}), [side]: !on } })}>{lbl}</button>
                 )
               })}
+            </div>
+          </div>
+          <div className="btn-row">
+            <button className="btn" onClick={dup}><IconCopy size={18} /> Duplicate</button>
+            <button className="btn danger" onClick={del}><IconTrash size={18} /> Delete</button>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  if (sel.type === 'builtin') {
+    const b = builtins.find((o) => o.uid === sel.uid)
+    if (!b) return null
+    return (
+      <>
+        <Head title="Built-in" sub={`${formatLen(b.w, units)} × ${formatLen(b.h, units)} × ${formatLen(b.depth, units)} deep`} onClose={onClose} />
+        <div className="insp">
+          <div className="row">
+            <div className="label">Style</div>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+              {[['cubby', 'Open cubby'], ['panel', 'Solid panel']].map(([k, lbl]) => (
+                <button key={k} className="chip" style={b.kind === k ? activeChip : undefined} onClick={() => set({ kind: k })}>{lbl}</button>
+              ))}
+            </div>
+          </div>
+          <Slider label="Width" value={b.w} min={0.1} max={12} step={0.05} onChange={(v) => set({ w: v }, `bw:${b.uid}`)} display={formatLen(b.w, units)} />
+          <Slider label="Height" value={b.h} min={0.1} max={6} step={0.05} onChange={(v) => set({ h: v }, `bh:${b.uid}`)} display={formatLen(b.h, units)} />
+          <Slider label="Depth" value={b.depth} min={0.05} max={3} step={0.05} onChange={(v) => set({ depth: v }, `bd:${b.uid}`)} display={formatLen(b.depth, units)} />
+          <div className="row" style={{ alignItems: 'flex-start' }}>
+            <div className="label">Colour</div>
+            <div className="swatches" style={{ marginLeft: 'auto', maxWidth: '70%', justifyContent: 'flex-end' }}>
+              {PALETTE.map((p) => (
+                <button key={p} className={`swatch ${b.color === p ? 'active' : ''}`} style={{ background: p }} onClick={() => set({ color: p })} aria-label={`Colour ${p}`} />
+              ))}
             </div>
           </div>
           <div className="btn-row">

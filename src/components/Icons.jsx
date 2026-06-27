@@ -67,3 +67,6 @@ export const IconWall = (p) => (
 export const IconHeight = (p) => (
   <S {...p}><path d="M12 3v18M8 6l4-3 4 3M8 18l4 3 4-3" /></S>
 )
+export const IconSide = (p) => (
+  <S {...p}><path d="M3 20h18" /><rect x="6" y="4" width="7" height="16" rx="1" /><path d="M13 9h5v11" /></S>
+)

@@ -16,7 +16,8 @@ function starter() {
     rooms: [],
     walls: [],
     items: [],
-    selected: null, // { type: 'item' | 'room' | 'wall', uid }
+    builtins: [],
+    selected: null, // { type: 'item' | 'room' | 'wall' | 'roomwall' | 'builtin', uid }
   }
 }
 
@@ -57,8 +58,14 @@ function clampWall(n) {
   if (n.thickness != null) n.thickness = clamp(n.thickness, 0.05, 0.5)
   return n
 }
+function clampBuiltin(n) {
+  if (n.w != null) n.w = clamp(n.w, 0.1, 12)
+  if (n.h != null) n.h = clamp(n.h, 0.1, 6)
+  if (n.depth != null) n.depth = clamp(n.depth, 0.05, 3)
+  return n
+}
 
-const COLL = { item: 'items', room: 'rooms', wall: 'walls' }
+const COLL = { item: 'items', room: 'rooms', wall: 'walls', builtin: 'builtins' }
 
 function patchOne(state, type, id, patch) {
   const key = COLL[type]
@@ -68,6 +75,7 @@ function patchOne(state, type, id, patch) {
     if (type === 'item') clampItem(n)
     if (type === 'room') clampRoom(n)
     if (type === 'wall') clampWall(n)
+    if (type === 'builtin') clampBuiltin(n)
     return n
   })
   return { ...state, [key]: arr }
@@ -105,6 +113,15 @@ function reducer(state, action) {
       return { ...state, walls: [...state.walls, wall], selected: { type: 'wall', uid: wall.uid } }
     }
 
+    case 'addBuiltin': {
+      const b = clampBuiltin({
+        uid: uid(), wall: action.wall, u: action.u, v: action.v,
+        w: action.w, h: action.h, depth: action.depth ?? 0.4,
+        color: action.color ?? '#c7ad84', kind: action.kind ?? 'cubby',
+      })
+      return { ...state, builtins: [...state.builtins, b], selected: { type: 'builtin', uid: b.uid } }
+    }
+
     case 'addItem': {
       const c = CATALOG_BY_TYPE[action.kind]
       if (!c) return state
@@ -132,6 +149,7 @@ function reducer(state, action) {
       if (!src) return state
       let copy
       if (type === 'wall') copy = { ...src, uid: uid(), x1: src.x1 + 0.3, z1: src.z1 + 0.3, x2: src.x2 + 0.3, z2: src.z2 + 0.3 }
+      else if (type === 'builtin') copy = { ...src, uid: uid(), u: src.u + 0.3, v: src.v + 0.3 }
       else copy = { ...src, uid: uid(), x: src.x + 0.3, z: src.z + 0.3 }
       return { ...state, [key]: [...state[key], copy], selected: { type, uid: copy.uid } }
     }
@@ -148,7 +166,7 @@ function reducer(state, action) {
 }
 
 // ---- history wrapper (undo / redo with drag coalescing) ----
-const HISTORIC = new Set(['addRoom', 'addWall', 'addItem', 'update', 'remove', 'duplicate', 'clear', 'reset', 'defaultHeight'])
+const HISTORIC = new Set(['addRoom', 'addWall', 'addItem', 'addBuiltin', 'update', 'remove', 'duplicate', 'clear', 'reset', 'defaultHeight'])
 const LIMIT = 80
 
 function root(c, action) {

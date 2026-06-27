@@ -2,13 +2,14 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { useStore } from '../store.jsx'
 import { haptic } from '../util.js'
 import Editor2D from './Editor2D.jsx'
+import ElevationEditor from './ElevationEditor.jsx'
 import Scene3D from './Scene3D.jsx'
 import Catalog from './Catalog.jsx'
 import Inspector from './Inspector.jsx'
 import SettingsSheet from './RoomSheet.jsx'
 import {
   IconPlan, IconCube, IconPlus, IconRotate, IconCopy, IconTrash, IconTune,
-  IconUndo, IconRedo, IconShare, IconCursor, IconSquare, IconWall,
+  IconUndo, IconRedo, IconShare, IconCursor, IconSquare, IconWall, IconSide,
 } from './Icons.jsx'
 
 export default function App() {
@@ -80,10 +81,13 @@ export default function App() {
 
         <div className="seg" role="tablist" aria-label="View mode">
           <button className={view === '2d' ? 'active' : ''} onClick={() => setView('2d')} aria-pressed={view === '2d'}>
-            <IconPlan size={16} /> Plan
+            <IconPlan size={15} /> Plan
+          </button>
+          <button className={view === 'side' ? 'active' : ''} onClick={() => setView('side')} aria-pressed={view === 'side'}>
+            <IconSide size={15} /> Side
           </button>
           <button className={view === '3d' ? 'active' : ''} onClick={() => setView('3d')} aria-pressed={view === '3d'}>
-            <IconCube size={16} /> 3D
+            <IconCube size={15} /> 3D
           </button>
         </div>
 
@@ -93,7 +97,7 @@ export default function App() {
       </header>
 
       <main className="stage">
-        {view === '2d' ? <Editor2D /> : <Scene3D />}
+        {view === '2d' ? <Editor2D /> : view === 'side' ? <ElevationEditor /> : <Scene3D />}
 
         {/* tool switcher (2D only) */}
         {view === '2d' && (
@@ -109,7 +113,7 @@ export default function App() {
           <button className="tool" disabled={!canRedo} onClick={() => dispatch({ type: 'redo' })} aria-label="Redo"><IconRedo size={18} /></button>
         </div>
 
-        {selected && tool === 'select' && (() => {
+        {selected && !(view === '2d' && tool !== 'select') && !(view === 'side' && selected.type !== 'builtin') && (() => {
           const rw = selected.type === 'roomwall' ? rooms.find((r) => r.uid === selected.uid) : null
           const rwOn = rw ? !rw.wallsOn || rw.wallsOn[selected.side] !== false : true
           const toggleWall = () => {
