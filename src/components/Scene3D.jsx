@@ -54,14 +54,15 @@ function woodTexture(baseHex = '#b08a5e') {
   return tex
 }
 
-export default function Scene3D() {
+export default function Scene3D({ onOpenInspector }) {
   const { state, dispatch } = useStore()
   const { rooms, walls, items, builtins, selected, ambiance } = state
   const { map: assetMap } = useAssets()
   const mountRef = useRef(null)
+  const menuRef = useRef(null)
   const refs = useRef({})
   const live = useRef({})
-  live.current = { rooms, walls, items, selected, dispatch }
+  live.current = { rooms, walls, items, selected, dispatch, onOpenInspector }
 
   // resolve a finish "tex" string to a cached base texture, or null for solid colour
   function finishBase(tex) {
@@ -371,6 +372,25 @@ export default function Scene3D() {
         else if (w.hidden && d < -0.1) w.hidden = false
         w.mesh.visible = !w.hidden
       }
+      // position the floating ⋯ button just above the selected item
+      const btn = menuRef.current
+      if (btn) {
+        const { items: its2, selected: sel2 } = live.current
+        const it = sel2?.type === 'item' ? its2.find((i) => i.uid === sel2.uid) : null
+        if (it && !refs.current.drag && !refs.current.rotate) {
+          const c = CATALOG_BY_TYPE[it.type]
+          const dd = effDims(c, it)
+          const v = new THREE.Vector3(it.x, dd.h + 0.35, it.z).project(camera)
+          const rect = renderer.domElement
+          const sx = (v.x * 0.5 + 0.5) * rect.clientWidth
+          const sy = (-v.y * 0.5 + 0.5) * rect.clientHeight
+          if (v.z < 1) {
+            btn.style.display = 'flex'
+            btn.style.left = `${sx}px`
+            btn.style.top = `${sy}px`
+          } else btn.style.display = 'none'
+        } else btn.style.display = 'none'
+      }
       if (composer) composer.render()
       else renderer.render(scene, camera)
       raf = requestAnimationFrame(tick)
@@ -603,6 +623,17 @@ export default function Scene3D() {
   return (
     <div className="scene3d" ref={mountRef}>
       <button className="recenter" onClick={reframe} aria-label="Recenter view"><IconCenter size={20} /></button>
+      <button
+        ref={menuRef}
+        className="piece-menu"
+        style={{ display: 'none' }}
+        aria-label="Edit piece"
+        title="Edit this piece"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); live.current.onOpenInspector?.() }}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
+      </button>
     </div>
   )
 }

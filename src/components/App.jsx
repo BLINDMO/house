@@ -21,12 +21,16 @@ export default function App() {
     return () => clearTimeout(t)
   }, [toast])
 
-  // displayed panel: an explicit override wins; otherwise selection shows the inspector
-  const panel = override || (selected ? 'inspector' : null)
+  // displayed panel: an explicit override wins; otherwise selection shows the
+  // inspector — except in 3D, where selecting only enables free dragging and a
+  // floating ⋯ button opens the inspector on demand (so it never blocks the view)
+  const panel = override || (selected && view !== '3d' ? 'inspector' : null)
 
   const setView = (v) => dispatch({ type: 'view', view: v })
   const openPanel = (kind) => setOverride((p) => (p === kind ? null : kind))
-  const closePanel = () => { setOverride(null); dispatch({ type: 'select', sel: null }) }
+  // Closing keeps the 3D selection alive (so you can keep moving the piece);
+  // in 2D/Side it deselects as before.
+  const closePanel = () => { setOverride(null); if (view !== '3d') dispatch({ type: 'select', sel: null }) }
 
   const newDesign = () => {
     dispatch({ type: 'reset' })
@@ -97,7 +101,7 @@ export default function App() {
         <Rail onOpen={openPanel} activePanel={panel} />
 
         <main className="stage">
-          {view === '2d' ? <Editor2D /> : view === 'side' ? <ElevationEditor /> : <Scene3D />}
+          {view === '2d' ? <Editor2D /> : view === 'side' ? <ElevationEditor /> : <Scene3D onOpenInspector={() => setOverride('inspector')} />}
         </main>
 
         {panel && <div className="panel-scrim" onClick={closePanel} />}

@@ -394,6 +394,26 @@ button {
   transform: scale(0.92);
 }
 
+/* ---------- 3D: floating per-piece edit (⋯) button ---------- */
+.piece-menu {
+  position: absolute;
+  z-index: 16;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #20160a;
+  border: 2px solid #20160a;
+  box-shadow: var(--shadow-2);
+  cursor: pointer;
+  touch-action: none;
+}
+.piece-menu:active { transform: translate(-50%, -50%) scale(0.9); }
+
 /* ---------- Sketch tool floating bar ---------- */
 .sketch-bar {
   position: absolute;
