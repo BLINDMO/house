@@ -375,7 +375,7 @@ export default function ElevationEditor() {
               if (b.kind === 'board') {
                 const [ax, ay] = toScreen(b.u1, b.v1)
                 const [bx, by] = toScreen(b.u2, b.v2)
-                return <line key={b.uid} x1={ax} y1={ay} x2={bx} y2={by} stroke={sel ? ACCENT : b.color} strokeWidth={Math.max(4, b.thickness * scale)} strokeLinecap="round" pointerEvents="none" filter="url(#esh)" />
+                return <line key={b.uid} x1={ax} y1={ay} x2={bx} y2={by} stroke={sel ? ACCENT : b.color} strokeWidth={Math.max(4, b.thickness * scale)} strokeLinecap="round" pointerEvents="none" />
               }
               const [bx, by] = toScreen(b.u, b.v + b.h)
               const open = b.kind === 'cubby'

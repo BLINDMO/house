@@ -461,7 +461,7 @@ export default function Editor2D() {
           const sel = selWall?.uid === wl.uid
           return (
             <line key={wl.uid} x1={ax} y1={ay} x2={bx} y2={by} stroke={sel ? ACCENT : WALL_ON}
-              strokeWidth={Math.max(5, wl.thickness * scale)} strokeLinecap="round" pointerEvents="none" filter="url(#softshadow)" />
+              strokeWidth={Math.max(5, wl.thickness * scale)} strokeLinecap="round" pointerEvents="none" />
           )
         })}
         {selWall && (() => {
