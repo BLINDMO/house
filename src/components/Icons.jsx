@@ -73,3 +73,9 @@ export const IconSide = (p) => (
 export const IconNew = (p) => (
   <S {...p}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M12 11v6M9 14h6" /></S>
 )
+export const IconPen = (p) => (
+  <S {...p}><path d="M12 19l7-7-4-4-7 7v4z" /><path d="M14 6l4 4M5 21l3-1" /></S>
+)
+export const IconCheck = (p) => (
+  <S {...p}><path d="M4 12l5 5L20 6" /></S>
+)

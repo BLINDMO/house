@@ -1,9 +1,9 @@
 import React, { useLayoutEffect, useRef, useState } from 'react'
 import { useStore, footHalf } from '../store.jsx'
 import { CATALOG_BY_TYPE } from '../data/catalog.js'
-import { effDims, formatLen } from '../util.js'
+import { effDims, formatLen, haptic } from '../util.js'
 import Footprint from './Footprint.jsx'
-import { IconCenter } from './Icons.jsx'
+import { IconCenter, IconCheck, IconClose, IconUndo } from './Icons.jsx'
 
 const ACCENT = '#d9b779'
 const WALL_ON = '#39414f'
@@ -13,10 +13,32 @@ const INCH = 0.0254
 const ITEM_GRID = INCH // free placement to the inch
 const HANDLE_HIT = 18
 const SIDES = ['n', 'e', 's', 'w']
+const SKETCH = '#2f7d8c'
+const CLOSE_PX = 16
 
 const snap = (v, g) => Math.round(v / g) * g
 const clampV = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 const wallOn = (room, side) => !room.wallsOn || room.wallsOn[side] !== false
+
+function pointInPoly(x, z, pts) {
+  let inside = false
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const xi = pts[i].x, zi = pts[i].z, xj = pts[j].x, zj = pts[j].z
+    if (((zi > z) !== (zj > z)) && (x < ((xj - xi) * (z - zi)) / (zj - zi) + xi)) inside = !inside
+  }
+  return inside
+}
+function polyPerim(pts, closed) {
+  let s = 0
+  const n = closed ? pts.length : pts.length - 1
+  for (let i = 0; i < n; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; s += Math.hypot(b.x - a.x, b.z - a.z) }
+  return s
+}
+function polyArea(pts) {
+  let a = 0
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) a += (pts[j].x + pts[i].x) * (pts[j].z - pts[i].z)
+  return Math.abs(a / 2)
+}
 
 function roomSide(r, side) {
   switch (side) {
@@ -37,9 +59,11 @@ function distToSeg(px, pz, x1, z1, x2, z2) {
 
 export default function Editor2D() {
   const { state, dispatch } = useStore()
-  const { rooms, walls, items, selected, units, tool, defaultHeight } = state
+  const { rooms, walls, items, sketches, selected, units, tool, defaultHeight } = state
   // Free placement down to the inch (or 1 cm in metric) — no coarse 2" grid.
   const SNAP = units === 'ft' ? INCH : 0.01
+  const [draft, setDraft] = useState([]) // in-progress sketch vertices
+  const [hover, setHover] = useState(null) // live cursor point for the rubber band
   const wrapRef = useRef(null)
   const svgRef = useRef(null)
   const [size, setSize] = useState({ W: 360, H: 540 })
@@ -76,6 +100,7 @@ export default function Editor2D() {
     for (const r of rooms) { acc(r.x, r.z); acc(r.x + r.w, r.z + r.d) }
     for (const w of walls) { acc(w.x1, w.z1); acc(w.x2, w.z2) }
     for (const it of items) { const c = CATALOG_BY_TYPE[it.type]; const d = effDims(c, it); acc(it.x - d.w / 2, it.z - d.d / 2); acc(it.x + d.w / 2, it.z + d.d / 2) }
+    for (const s of sketches) for (const p of s.pts) acc(p.x, p.z)
     if (!isFinite(minX)) { setXf({ scale: 64, panX: W / 2, panY: H / 2, init: true }); return }
     const padX = 56
     const padTop = 92 // clear the tool switcher
@@ -91,7 +116,7 @@ export default function Editor2D() {
 
   // Auto-fit on first load with content, the first time a plan is started,
   // and whenever the stage width changes a lot (e.g. the panel opens/closes).
-  const hasContent = rooms.length > 0 || walls.length > 0 || items.length > 0
+  const hasContent = rooms.length > 0 || walls.length > 0 || items.length > 0 || sketches.length > 0
   const prevW = useRef(0)
   useLayoutEffect(() => {
     if (!size.W) return
@@ -103,6 +128,12 @@ export default function Editor2D() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size.W, hasContent])
+
+  // Discard any in-progress sketch when leaving the Sketch tool.
+  useLayoutEffect(() => {
+    if (tool !== 'sketch') { setDraft([]); setHover(null) }
+  }, [tool])
+
   const { scale, panX, panY } = xf
   const toScreen = (x, z) => [x * scale + panX, z * scale + panY]
   const toWorld = (px, py) => [(px - panX) / scale, (py - panY) / scale]
@@ -114,6 +145,7 @@ export default function Editor2D() {
   const selItem = selected?.type === 'item' ? items.find((i) => i.uid === selected.uid) : null
   const selRoom = selected?.type === 'room' ? rooms.find((r) => r.uid === selected.uid) : null
   const selWall = selected?.type === 'wall' ? walls.find((w) => w.uid === selected.uid) : null
+  const selSketch = selected?.type === 'sketch' ? sketches.find((s) => s.uid === selected.uid) : null
 
   function itemCorners(it) {
     const c = CATALOG_BY_TYPE[it.type]
@@ -169,6 +201,15 @@ export default function Editor2D() {
       const w = walls[i]
       if (distToSeg(wx, wz, w.x1, w.z1, w.x2, w.z2) <= w.thickness / 2 + 0.18) return { kind: 'wall', uid: w.uid }
     }
+    // sketch edges
+    for (let i = sketches.length - 1; i >= 0; i--) {
+      const s = sketches[i]
+      const segs = s.closed ? s.pts.length : s.pts.length - 1
+      for (let j = 0; j < segs; j++) {
+        const a = s.pts[j], b = s.pts[(j + 1) % s.pts.length]
+        if (distToSeg(wx, wz, a.x, a.z, b.x, b.z) <= 0.18) return { kind: 'sketch', uid: s.uid }
+      }
+    }
     // room wall sides (a click on an edge selects that wall, not the room)
     for (let i = rooms.length - 1; i >= 0; i--) {
       const r = rooms[i]
@@ -180,6 +221,10 @@ export default function Editor2D() {
     for (let i = rooms.length - 1; i >= 0; i--) {
       const r = rooms[i]
       if (wx >= r.x && wx <= r.x + r.w && wz >= r.z && wz <= r.z + r.d) return { kind: 'room', uid: r.uid }
+    }
+    for (let i = sketches.length - 1; i >= 0; i--) {
+      const s = sketches[i]
+      if (s.closed && s.pts.length >= 3 && pointInPoly(wx, wz, s.pts)) return { kind: 'sketch', uid: s.uid }
     }
     return { kind: 'empty' }
   }
@@ -234,6 +279,11 @@ export default function Editor2D() {
       setGesture({ kind: 'drawWall', x1: sx, z1: sz, cur: { x1: sx, z1: sz, x2: sx, z2: sz } })
       return
     }
+    if (tool === 'sketch') {
+      // a tap places a vertex; a drag pans the board
+      setGesture({ kind: 'sketch', sx: px, sy: py, panX: xfRef.current.panX, panY: xfRef.current.panY, moved: false })
+      return
+    }
 
     const h = hitTest(px, py)
     switch (h.kind) {
@@ -256,6 +306,12 @@ export default function Editor2D() {
         const w = walls.find((o) => o.uid === h.uid)
         dispatch({ type: 'select', sel: { type: 'wall', uid: h.uid } })
         setGesture({ kind: 'moveWall', uid: h.uid, ox: wx, oz: wz, x1: w.x1, z1: w.z1, x2: w.x2, z2: w.z2 })
+        break
+      }
+      case 'sketch': {
+        const s = sketches.find((o) => o.uid === h.uid)
+        dispatch({ type: 'select', sel: { type: 'sketch', uid: h.uid } })
+        setGesture({ kind: 'moveSketch', uid: h.uid, ox: wx, oz: wz, pts: s.pts })
         break
       }
       case 'roomwall':
@@ -288,6 +344,11 @@ export default function Editor2D() {
       return
     }
 
+    if (tool === 'sketch' && pointers.current.size <= 1) {
+      const [hwx, hwz] = toWorld(px, py)
+      setHover({ x: snapX(hwx), z: snapZ(hwz) })
+    }
+
     const g = gestureRef.current
     if (!g) return
     const [wx, wz] = toWorld(px, py)
@@ -295,6 +356,9 @@ export default function Editor2D() {
     if (g.kind === 'pan') {
       if (!g.moved && Math.hypot(px - g.sx, py - g.sy) > 4) g.moved = true
       setXf((s) => ({ ...s, panX: g.panX + (px - g.sx), panY: g.panY + (py - g.sy) }))
+    } else if (g.kind === 'sketch') {
+      if (!g.moved && Math.hypot(px - g.sx, py - g.sy) > 7) g.moved = true
+      if (g.moved) setXf((s) => ({ ...s, panX: g.panX + (px - g.sx), panY: g.panY + (py - g.sy) }))
     } else if (g.kind === 'drawRoom') {
       const x1 = snapX(wx)
       const z1 = snapZ(wz)
@@ -351,15 +415,36 @@ export default function Editor2D() {
     } else if (g.kind === 'wallEnd') {
       const patch = g.end === '1' ? { x1: snap(wx, SNAP), z1: snap(wz, SNAP) } : { x2: snap(wx, SNAP), z2: snap(wz, SNAP) }
       dispatch({ type: 'update', sel: { type: 'wall', uid: g.uid }, patch, mergeKey: `we:${g.uid}` })
+    } else if (g.kind === 'moveSketch') {
+      const dx = snap(wx - g.ox, SNAP)
+      const dz = snap(wz - g.oz, SNAP)
+      dispatch({ type: 'update', sel: { type: 'sketch', uid: g.uid }, patch: { pts: g.pts.map((p) => ({ x: p.x + dx, z: p.z + dz })) }, mergeKey: `mv:${g.uid}` })
     }
   }
 
   const onUp = (e) => {
+    const [px, py] = ptr(e)
     pointers.current.delete(e.pointerId)
     if (pointers.current.size < 2) pinch.current = null
     const g = gestureRef.current
     if (g) {
-      if (g.kind === 'drawRoom') {
+      if (g.kind === 'sketch') {
+        if (!g.moved) {
+          const [wx, wz] = toWorld(px, py)
+          const p = { x: snapX(wx), z: snapZ(wz) }
+          let closed = false
+          if (draft.length >= 3) {
+            const [fx, fy] = toScreen(draft[0].x, draft[0].z)
+            if (Math.hypot(px - fx, py - fy) < CLOSE_PX) closed = true
+          }
+          if (closed) {
+            dispatch({ type: 'addSketch', pts: draft, closed: true })
+            setDraft([]); setHover(null); haptic(12)
+          } else {
+            setDraft((d) => [...d, p]); haptic(6)
+          }
+        }
+      } else if (g.kind === 'drawRoom') {
         if (g.cur.w > 0.3 && g.cur.d > 0.3) {
           dispatch({ type: 'addRoom', x: g.cur.x, z: g.cur.z, w: g.cur.w, d: g.cur.d, height: defaultHeight })
         } else {
@@ -374,6 +459,37 @@ export default function Editor2D() {
     }
     if (pointers.current.size === 0) setGesture(null)
     try { svgRef.current.releasePointerCapture(e.pointerId) } catch { /* noop */ }
+  }
+
+  const commitSketch = (closed) => {
+    if ((closed && draft.length >= 3) || (!closed && draft.length >= 2)) {
+      dispatch({ type: 'addSketch', pts: draft, closed })
+      haptic(12)
+    }
+    setDraft([]); setHover(null)
+  }
+
+  // Screen-space points string + segment length labels for a polyline/polygon.
+  function sketchSegLabels(pts, closed, fill, keyp) {
+    const out = []
+    const n = closed ? pts.length : pts.length - 1
+    for (let j = 0; j < n; j++) {
+      const a = pts[j], b = pts[(j + 1) % pts.length]
+      const len = Math.hypot(b.x - a.x, b.z - a.z)
+      if (len < 1e-3) continue
+      const [ax, ay] = toScreen(a.x, a.z)
+      const [bx, by] = toScreen(b.x, b.z)
+      let mx = (ax + bx) / 2, my = (ay + by) / 2
+      const nx = -(by - ay), ny = bx - ax
+      const nl = Math.hypot(nx, ny) || 1
+      mx += (nx / nl) * 11; my += (ny / nl) * 11
+      out.push(
+        <text key={`${keyp}-l${j}`} x={mx} y={my + 3} textAnchor="middle" fontSize={11} fontWeight={700}
+          fill={fill} stroke="#fff" strokeWidth={3.2} paintOrder="stroke" strokeLinejoin="round"
+          fontFamily="-apple-system, system-ui, sans-serif">{formatLen(len, units)}</text>
+      )
+    }
+    return out
   }
 
   const onWheel = (e) => {
@@ -421,7 +537,7 @@ export default function Editor2D() {
     }
   }
 
-  const empty = rooms.length === 0 && walls.length === 0 && items.length === 0
+  const empty = rooms.length === 0 && walls.length === 0 && items.length === 0 && sketches.length === 0 && draft.length === 0
 
   return (
     <div className="editor2d" ref={wrapRef}>
@@ -498,6 +614,44 @@ export default function Editor2D() {
             <g pointerEvents="none">
               <circle cx={ax} cy={ay} r={7} fill="#fff" stroke={ACCENT} strokeWidth={2.5} filter="url(#softshadow)" />
               <circle cx={bx} cy={by} r={7} fill="#fff" stroke={ACCENT} strokeWidth={2.5} filter="url(#softshadow)" />
+            </g>
+          )
+        })()}
+
+        {/* sketches (free-draw plan outlines) */}
+        {sketches.map((s) => {
+          const sel = selSketch?.uid === s.uid
+          const ptsStr = s.pts.map((p) => toScreen(p.x, p.z).join(',')).join(' ')
+          const col = sel ? ACCENT : SKETCH
+          return (
+            <g key={s.uid} pointerEvents="none">
+              {s.closed
+                ? <polygon points={ptsStr} fill={col} fillOpacity={0.07} stroke={col} strokeWidth={sel ? 3 : 2.5} strokeLinejoin="round" />
+                : <polyline points={ptsStr} fill="none" stroke={col} strokeWidth={sel ? 3 : 2.5} strokeLinejoin="round" strokeLinecap="round" />}
+              {sketchSegLabels(s.pts, s.closed, sel ? '#7a5a16' : '#15545f', s.uid)}
+              {sel && s.pts.map((p, i) => {
+                const [hx, hy] = toScreen(p.x, p.z)
+                return <circle key={i} cx={hx} cy={hy} r={5} fill="#fff" stroke={ACCENT} strokeWidth={2.5} filter="url(#softshadow)" />
+              })}
+            </g>
+          )
+        })}
+
+        {/* in-progress sketch */}
+        {tool === 'sketch' && draft.length > 0 && (() => {
+          const pts = hover ? [...draft, hover] : draft
+          const ptsStr = pts.map((p) => toScreen(p.x, p.z).join(',')).join(' ')
+          const [fx, fy] = toScreen(draft[0].x, draft[0].z)
+          const canClose = draft.length >= 3
+          return (
+            <g pointerEvents="none">
+              <polyline points={ptsStr} fill="none" stroke={ACCENT} strokeWidth={2.5} strokeDasharray="7 5" strokeLinejoin="round" strokeLinecap="round" />
+              {sketchSegLabels(pts, false, '#7a5a16', 'draft')}
+              {draft.map((p, i) => {
+                const [hx, hy] = toScreen(p.x, p.z)
+                return <circle key={i} cx={hx} cy={hy} r={i === 0 ? 6 : 4.5} fill={i === 0 ? ACCENT : '#fff'} stroke={ACCENT} strokeWidth={2.5} filter="url(#softshadow)" />
+              })}
+              {canClose && <circle cx={fx} cy={fy} r={11} fill="none" stroke={ACCENT} strokeWidth={2} strokeDasharray="3 3" />}
             </g>
           )
         })()}
@@ -592,10 +746,19 @@ export default function Editor2D() {
 
       <button className="recenter" onClick={fitView} aria-label="Fit to view"><IconCenter size={20} /></button>
 
+      {tool === 'sketch' && draft.length > 0 && (
+        <div className="sketch-bar">
+          <button onClick={() => setDraft((d) => d.slice(0, -1))} title="Undo last point"><IconUndo size={17} /></button>
+          <button onClick={() => commitSketch(false)} disabled={draft.length < 2} title="Finish open line"><IconCheck size={18} /> Finish</button>
+          <button className="accent" onClick={() => commitSketch(true)} disabled={draft.length < 3} title="Close shape"><IconCheck size={18} /> Close shape</button>
+          <button onClick={() => { setDraft([]); setHover(null) }} title="Cancel"><IconClose size={17} /></button>
+        </div>
+      )}
+
       {empty && (
         <div className="empty">
           <b>Start your floor plan</b>
-          <span>Pick <strong>Room</strong> in the toolbar and drag — or just tap the canvas to drop one.</span>
+          <span>Pick <strong>Room</strong> and drag, or use <strong>Sketch</strong> to free-draw any space with live measurements — or just tap to drop a room.</span>
           <button className="empty-cta" onClick={() => dispatch({ type: 'addRoom', x: snapX(-1.8), z: snapZ(-1.5), w: 3.6, d: 3, height: defaultHeight })}>
             + Add a room
           </button>
@@ -605,9 +768,11 @@ export default function Editor2D() {
       <div className="hint">
         {tool === 'room' ? 'Drag to draw a room'
           : tool === 'wall' ? 'Drag to draw a wall'
+          : tool === 'sketch' ? 'Tap to drop points — each edge is measured · tap the first point to close · drag to pan'
           : selItem ? 'Drag to move · drag white corners to resize'
           : selRoom ? 'Drag inside to move · corners to resize · tap a wall to edit it'
           : selWall ? 'Drag the wall or its endpoints'
+          : selSketch ? 'Drag to move this sketch · edit dimensions in the panel'
           : selected?.type === 'roomwall' ? 'Use the button to delete or restore this wall'
           : 'Drag to pan · pinch to zoom · tap a wall to select it'}
       </div>

@@ -394,6 +394,48 @@ button {
   transform: scale(0.92);
 }
 
+/* ---------- Sketch tool floating bar ---------- */
+.sketch-bar {
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  transform: translateX(-50%);
+  z-index: 16;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 14px;
+  background: rgba(31, 36, 44, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-2);
+}
+.sketch-bar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.sketch-bar button.accent {
+  background: var(--accent);
+  border-color: var(--accent-line);
+  color: #20160a;
+}
+.sketch-bar button:disabled {
+  opacity: 0.4;
+}
+.sketch-bar button:active {
+  transform: scale(0.94);
+}
+
 /* ---------- Top-bar tools (undo/redo/export) ---------- */
 .tools {
   display: flex;

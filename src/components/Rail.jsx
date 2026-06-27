@@ -1,7 +1,7 @@
 import React from 'react'
 import { useStore } from '../store.jsx'
 import {
-  IconCursor, IconSquare, IconWall, IconLayers, IconPlus, IconTune, IconSun,
+  IconCursor, IconSquare, IconWall, IconLayers, IconPlus, IconTune, IconSun, IconPen,
 } from './Icons.jsx'
 
 function RailBtn({ icon, label, active, accent, onClick }) {
@@ -25,6 +25,7 @@ export default function Rail({ onOpen, activePanel }) {
             <RailBtn icon={<IconCursor size={20} />} label="Select" active={tool === 'select'} onClick={() => dispatch({ type: 'tool', tool: 'select' })} />
             <RailBtn icon={<IconSquare size={20} />} label="Room" active={tool === 'room'} onClick={() => dispatch({ type: 'tool', tool: 'room' })} />
             <RailBtn icon={<IconWall size={20} />} label="Wall" active={tool === 'wall'} onClick={() => dispatch({ type: 'tool', tool: 'wall' })} />
+            <RailBtn icon={<IconPen size={20} />} label="Sketch" active={tool === 'sketch'} onClick={() => dispatch({ type: 'tool', tool: 'sketch' })} />
           </>
         )}
         {view === 'side' && (

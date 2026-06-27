@@ -1,7 +1,7 @@
 import React from 'react'
 import { useStore } from '../store.jsx'
 import { CATALOG_BY_TYPE } from '../data/catalog.js'
-import { effDims, formatLen } from '../util.js'
+import { effDims, formatLen, formatArea } from '../util.js'
 import { IconRotate, IconCopy, IconTrash } from './Icons.jsx'
 import FinishPicker from './FinishPicker.jsx'
 
@@ -54,7 +54,7 @@ function MeasureRow({ label, m, min, max, units, onChange }) {
 
 export default function Inspector({ onClose, onFlash }) {
   const { state, dispatch } = useStore()
-  const { selected, units, items, rooms, walls, builtins } = state
+  const { selected, units, items, rooms, walls, builtins, sketches } = state
   if (!selected) return null
 
   const sel = selected
@@ -216,6 +216,42 @@ export default function Inspector({ onClose, onFlash }) {
             <div className="label">Finish</div>
             <div style={{ marginLeft: 'auto', maxWidth: '74%' }}>
               <FinishPicker value={{ color: b.color, tex: b.tex }} onChange={(f) => set({ color: f.color, tex: f.tex })} />
+            </div>
+          </div>
+          <div className="btn-row">
+            <button className="btn" onClick={dup}><IconCopy size={18} /> Duplicate</button>
+            <button className="btn danger" onClick={del}><IconTrash size={18} /> Delete</button>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  if (sel.type === 'sketch') {
+    const s = sketches.find((o) => o.uid === sel.uid)
+    if (!s) return null
+    const pts = s.pts
+    const segCount = s.closed ? pts.length : pts.length - 1
+    let perim = 0
+    for (let i = 0; i < segCount; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; perim += Math.hypot(b.x - a.x, b.z - a.z) }
+    let area = 0
+    if (s.closed && pts.length >= 3) {
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) area += (pts[j].x + pts[i].x) * (pts[j].z - pts[i].z)
+      area = Math.abs(area / 2)
+    }
+    return (
+      <>
+        <Head title="Sketch" sub={`${s.closed ? 'Closed shape' : 'Open outline'} · ${pts.length} points`} onClose={onClose} />
+        <div className="insp">
+          <div className="row"><div className="label">Perimeter</div><div className="val">{formatLen(perim, units)}</div></div>
+          {s.closed && <div className="row"><div className="label">Area</div><div className="val">{formatArea(area, units)}</div></div>}
+          <div className="row" style={{ alignItems: 'flex-start' }}>
+            <div className="label">Edges</div>
+            <div className="val" style={{ marginLeft: 'auto', textAlign: 'right', lineHeight: 1.6 }}>
+              {Array.from({ length: segCount }, (_, i) => {
+                const a = pts[i], b = pts[(i + 1) % pts.length]
+                return <div key={i}>{formatLen(Math.hypot(b.x - a.x, b.z - a.z), units)}</div>
+              })}
             </div>
           </div>
           <div className="btn-row">

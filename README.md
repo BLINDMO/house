@@ -11,7 +11,8 @@ Start fast: pick **Room** and drag — or tap to drop a default room — and kee
 ## Features
 
 - **Start from a blank canvas** — an infinite, pannable/pinch-zoomable grid. Nothing is preset.
-- **Draw rooms & walls** — the **Room** tool drags out a rectangular room; the **Wall** tool draws standalone partition walls. Everything snaps to a grid.
+- **Draw rooms & walls** — the **Room** tool drags out a rectangular room; the **Wall** tool draws standalone partition walls. Everything snaps to the inch.
+- **Free-draw Sketch tool** — tap out any shape on the grid-paper canvas (a nook, an alcove, a whole irregular footprint); every edge is labelled with its real length in feet + inches as you go, tap the first point to close it into a measured area, and read its perimeter/area in the panel. Perfect for mocking up a space before building custom cabinetry or a bunk bed against it.
 - **Adjustable wall height** — set a default for new rooms/walls in Settings, or select any room/wall and change its height (and thickness) individually.
 - **Drag to arrange anywhere** — move any piece with a finger, in or out of a room (no clamping); rotate, duplicate, recolour, or delete from the contextual controls.
 - **Click-and-drag resizing** — select a piece and pull its corner handles; a live badge shows the footprint in feet (toggle to metres in Settings).

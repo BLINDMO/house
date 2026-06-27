@@ -9,7 +9,7 @@ const uid = () => `${Date.now().toString(36)}-${(seq++).toString(36)}`
 function starter() {
   return {
     view: '2d',
-    tool: 'select', // 'select' | 'room' | 'wall'
+    tool: 'select', // 'select' | 'room' | 'wall' | 'sketch'
     sideTool: 'select', // 'select' | 'box' | 'board'
     sideWall: null, // wall ref { kind, uid, side } for the Side view
     units: 'ft',
@@ -19,7 +19,8 @@ function starter() {
     walls: [],
     items: [],
     builtins: [],
-    selected: null, // { type: 'item' | 'room' | 'wall' | 'roomwall' | 'builtin', uid }
+    sketches: [], // freehand plan outlines: { uid, pts:[{x,z}], closed }
+    selected: null, // { type: 'item' | 'room' | 'wall' | 'roomwall' | 'builtin' | 'sketch', uid }
   }
 }
 
@@ -68,7 +69,7 @@ function clampBuiltin(n) {
   return n
 }
 
-const COLL = { item: 'items', room: 'rooms', wall: 'walls', builtin: 'builtins' }
+const COLL = { item: 'items', room: 'rooms', wall: 'walls', builtin: 'builtins', sketch: 'sketches' }
 
 function patchOne(state, type, id, patch) {
   const key = COLL[type]
@@ -130,6 +131,11 @@ function reducer(state, action) {
       return { ...state, builtins: [...state.builtins, ...list], selected: list.length ? { type: 'builtin', uid: list[list.length - 1].uid } : state.selected }
     }
 
+    case 'addSketch': {
+      const s = { uid: uid(), pts: action.pts, closed: !!action.closed, color: action.color || '#3f7d8c' }
+      return { ...state, sketches: [...state.sketches, s], selected: { type: 'sketch', uid: s.uid } }
+    }
+
     case 'addItem': {
       const c = CATALOG_BY_TYPE[action.kind]
       if (!c) return state
@@ -160,6 +166,7 @@ function reducer(state, action) {
       else if (type === 'builtin') copy = src.kind === 'board'
         ? { ...src, uid: uid(), u1: src.u1 + 0.3, v1: src.v1 + 0.3, u2: src.u2 + 0.3, v2: src.v2 + 0.3 }
         : { ...src, uid: uid(), u: src.u + 0.3, v: src.v + 0.3 }
+      else if (type === 'sketch') copy = { ...src, uid: uid(), pts: src.pts.map((p) => ({ x: p.x + 0.3, z: p.z + 0.3 })) }
       else copy = { ...src, uid: uid(), x: src.x + 0.3, z: src.z + 0.3 }
       return { ...state, [key]: [...state[key], copy], selected: { type, uid: copy.uid } }
     }
@@ -176,7 +183,7 @@ function reducer(state, action) {
 }
 
 // ---- history wrapper (undo / redo with drag coalescing) ----
-const HISTORIC = new Set(['addRoom', 'addWall', 'addItem', 'addBuiltin', 'addBuiltins', 'update', 'remove', 'duplicate', 'clear', 'reset', 'defaultHeight'])
+const HISTORIC = new Set(['addRoom', 'addWall', 'addSketch', 'addItem', 'addBuiltin', 'addBuiltins', 'update', 'remove', 'duplicate', 'clear', 'reset', 'defaultHeight'])
 const LIMIT = 80
 
 function root(c, action) {
