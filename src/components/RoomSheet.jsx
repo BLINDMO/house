@@ -22,7 +22,6 @@ export default function SettingsSheet({ onFlash, onClose }) {
           <h2>Settings</h2>
           <div className="sub">{rooms.length} rooms · {walls.length} walls · {items.length} items</div>
         </div>
-        <button className="close" onClick={onClose} aria-label="Close">✕</button>
       </div>
 
       <div className="insp">

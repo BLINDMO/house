@@ -10,6 +10,8 @@ function starter() {
   return {
     view: '2d',
     tool: 'select', // 'select' | 'room' | 'wall'
+    sideTool: 'select', // 'select' | 'box' | 'board'
+    sideWall: null, // wall ref { kind, uid, side } for the Side view
     units: 'ft',
     ambiance: 'day',
     defaultHeight: 2.7,
@@ -27,7 +29,7 @@ function load() {
     if (!raw) return starter()
     const data = JSON.parse(raw)
     if (!data || !Array.isArray(data.items)) return starter()
-    return { ...starter(), ...data, tool: 'select', selected: null }
+    return { ...starter(), ...data, tool: 'select', sideTool: 'select', selected: null }
   } catch {
     return starter()
   }
@@ -92,6 +94,10 @@ function reducer(state, action) {
       return { ...state, units: action.value }
     case 'tool':
       return { ...state, tool: action.tool, selected: action.tool === 'select' ? state.selected : null }
+    case 'sideTool':
+      return { ...state, sideTool: action.tool, selected: action.tool === 'select' ? state.selected : null }
+    case 'sideWall':
+      return { ...state, sideWall: action.ref }
     case 'defaultHeight':
       return { ...state, defaultHeight: clamp(action.value, 1.5, 6) }
 

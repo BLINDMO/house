@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useStore } from '../store.jsx'
 import { formatLen } from '../util.js'
 import { wallGeometry, listWalls, refEq } from '../wall.js'
-import { IconCursor, IconSquare, IconWall, IconCenter, IconLayers } from './Icons.jsx'
+import { IconCenter } from './Icons.jsx'
 
 const ACCENT = '#d9b779'
 const GRID = 0.05
@@ -31,7 +31,7 @@ export const PRESETS = [
   { id: 'wardrobe', name: 'Wardrobe' },
 ]
 
-function buildPreset(id, geom, ref) {
+export function buildPreset(id, geom, ref) {
   const L = geom.length
   const H = geom.height
   const out = []
@@ -72,14 +72,13 @@ function buildPreset(id, geom, ref) {
 
 export default function ElevationEditor() {
   const { state, dispatch } = useStore()
-  const { rooms, walls, builtins, selected, units } = state
+  const { rooms, walls, builtins, selected, units, sideTool } = state
+  const eTool = sideTool
   const wrapRef = useRef(null)
   const svgRef = useRef(null)
   const [size, setSize] = useState({ W: 360, H: 540 })
   const [xf, setXf] = useState({ scale: 64, panX: 60, panY: 460, init: false })
-  const [eTool, setETool] = useState('box')
   const [wallIdx, setWallIdx] = useState(0)
-  const [menu, setMenu] = useState(false)
   const [gesture, setGesture] = useState(null)
   const gestureRef = useRef(null)
   gestureRef.current = gesture
@@ -97,13 +96,23 @@ export default function ElevationEditor() {
   useEffect(() => {
     if (synced.current || !list.length) return
     synced.current = true
-    if (selected && (selected.type === 'wall' || selected.type === 'roomwall')) {
-      const ref = selected.type === 'wall' ? { kind: 'wall', uid: selected.uid } : { kind: 'room', uid: selected.uid, side: selected.side }
+    let ref = state.sideWall
+    if (!ref && selected && (selected.type === 'wall' || selected.type === 'roomwall')) {
+      ref = selected.type === 'wall' ? { kind: 'wall', uid: selected.uid } : { kind: 'room', uid: selected.uid, side: selected.side }
+    }
+    if (ref) {
       const i = list.findIndex((l) => refEq(l.ref, ref))
       if (i >= 0) setWallIdx(i)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // keep the store's current wall in sync so the rail/presets panel knows it
+  const refKey = current ? `${current.ref.kind}:${current.ref.uid}:${current.ref.side || ''}` : ''
+  useEffect(() => {
+    if (current) dispatch({ type: 'sideWall', ref: current.ref })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refKey])
 
   useLayoutEffect(() => {
     const el = wrapRef.current
@@ -202,7 +211,7 @@ export default function ElevationEditor() {
       else setGesture({ kind: 'moveB', uid: h.uid, ou: u - b.u, ov: v - b.v })
     } else if (eTool === 'box') {
       setGesture({ kind: 'drawBox', u0: snap(u, GRID), v0: snap(v, GRID), cur: { u: snap(u, GRID), v: snap(v, GRID), w: 0, h: 0 } })
-    } else if (eTool === 'line') {
+    } else if (eTool === 'board') {
       const su = snap(u, GRID)
       const sv = snap(v, GRID)
       setGesture({ kind: 'drawLine', u1: su, v1: sv, cur: { u1: su, v1: sv, u2: su, v2: sv } })
@@ -277,7 +286,7 @@ export default function ElevationEditor() {
     if (g && geom) {
       if (g.kind === 'drawBox' && g.cur.w > 0.1 && g.cur.h > 0.1) {
         dispatch({ type: 'addBuiltin', builtin: { wall: current.ref, u: g.cur.u, v: g.cur.v, w: g.cur.w, h: g.cur.h, depth: 0.5, kind: 'cubby', color: WOOD.color, tex: WOOD.tex } })
-        setETool('select')
+        dispatch({ type: 'sideTool', tool: 'select' })
       } else if (g.kind === 'drawLine' && Math.hypot(g.cur.u2 - g.cur.u1, g.cur.v2 - g.cur.v1) > 0.05) {
         dispatch({ type: 'addBuiltin', builtin: { wall: current.ref, kind: 'board', u1: g.cur.u1, v1: g.cur.v1, u2: g.cur.u2, v2: g.cur.v2, thickness: 0.05, depth: 0.04, color: WOOD.color, tex: WOOD.tex } })
       } else if (g.kind === 'pan' && !g.moved) {
@@ -295,12 +304,6 @@ export default function ElevationEditor() {
     setXf({ scale: ns, panX: px - ((px - v.panX) / v.scale) * ns, panY: py + ((v.panY - py) / v.scale) * ns, init: true })
   }
 
-  const addPreset = (id) => {
-    if (!geom) return
-    dispatch({ type: 'addBuiltins', list: buildPreset(id, geom, current.ref) })
-    setMenu(false)
-    setETool('select')
-  }
 
   // grid + elevation furnishings
   const grid = []
@@ -461,27 +464,12 @@ export default function ElevationEditor() {
         <button onClick={() => setWallIdx((idx + 1) % list.length)} aria-label="Next wall">›</button>
       </div>
 
-      <div className="toolbar" style={{ top: 60 }}>
-        <button className={eTool === 'select' ? 'active' : ''} onClick={() => setETool('select')}><IconCursor size={16} /> Select</button>
-        <button className={eTool === 'box' ? 'active' : ''} onClick={() => setETool('box')}><IconSquare size={16} /> Box</button>
-        <button className={eTool === 'line' ? 'active' : ''} onClick={() => setETool('line')}><IconWall size={16} /> Board</button>
-        <button className={menu ? 'active' : ''} onClick={() => setMenu((m) => !m)}><IconLayers size={16} /> Presets</button>
-      </div>
-
-      {menu && (
-        <div className="preset-menu">
-          {PRESETS.map((p) => (
-            <button key={p.id} onClick={() => addPreset(p.id)}>{p.name}</button>
-          ))}
-        </div>
-      )}
-
       <button className="recenter" onClick={fitView} aria-label="Fit to view"><IconCenter size={20} /></button>
 
       <div className="hint">
         {selMine ? 'Drag to move · drag handles to resize · edit for depth & finish'
           : eTool === 'box' ? 'Drag empty space to add a box · tap a piece to edit it'
-          : eTool === 'line' ? 'Drag empty space to draw a board · tap a piece to edit it'
+          : eTool === 'board' ? 'Drag empty space to draw a board · tap a piece to edit it'
           : 'Tap a piece to edit · drag the gold dots to resize the room'}
       </div>
     </div>

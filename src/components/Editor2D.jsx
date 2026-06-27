@@ -87,10 +87,15 @@ export default function Editor2D() {
     setXf({ scale: ns, panX: W / 2 - cx * ns, panY: cy - cz * ns, init: true })
   }
 
-  // Auto-fit on first load with content, and the first time a plan is started.
+  // Auto-fit on first load with content, the first time a plan is started,
+  // and whenever the stage width changes a lot (e.g. the panel opens/closes).
   const hasContent = rooms.length > 0 || walls.length > 0 || items.length > 0
+  const prevW = useRef(0)
   useLayoutEffect(() => {
-    if (size.W && hasContent && !fitted.current) {
+    if (!size.W) return
+    const big = prevW.current && Math.abs(size.W - prevW.current) > 60
+    prevW.current = size.W
+    if (hasContent && (!fitted.current || big)) {
       fitView()
       fitted.current = true
     }

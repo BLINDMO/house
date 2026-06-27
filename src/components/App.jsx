@@ -4,18 +4,15 @@ import { haptic } from '../util.js'
 import Editor2D from './Editor2D.jsx'
 import ElevationEditor from './ElevationEditor.jsx'
 import Scene3D from './Scene3D.jsx'
-import Catalog from './Catalog.jsx'
-import Inspector from './Inspector.jsx'
-import SettingsSheet from './RoomSheet.jsx'
-import {
-  IconPlan, IconCube, IconPlus, IconRotate, IconCopy, IconTrash, IconTune,
-  IconUndo, IconRedo, IconShare, IconCursor, IconSquare, IconWall, IconSide,
-} from './Icons.jsx'
+import Rail from './Rail.jsx'
+import Panel from './Panel.jsx'
+import RotateGate from './RotateGate.jsx'
+import { IconPlan, IconCube, IconSide, IconUndo, IconRedo, IconShare } from './Icons.jsx'
 
 export default function App() {
   const { state, dispatch, canUndo, canRedo } = useStore()
-  const { view, selected, rooms, items, tool } = state
-  const [sheet, setSheet] = useState(null) // 'catalog' | 'settings' | 'inspector'
+  const { view, selected, rooms } = state
+  const [override, setOverride] = useState(null) // 'catalog' | 'settings' | 'presets'
   const [toast, setToast] = useState(null)
 
   const flash = useCallback((msg) => setToast({ msg, t: Date.now() }), [])
@@ -25,13 +22,12 @@ export default function App() {
     return () => clearTimeout(t)
   }, [toast])
 
-  const hasSel = !!selected
-  useEffect(() => {
-    if (sheet === 'inspector' && !hasSel) setSheet(null)
-  }, [sheet, hasSel])
+  // displayed panel: an explicit override wins; otherwise selection shows the inspector
+  const panel = override || (selected ? 'inspector' : null)
 
   const setView = (v) => dispatch({ type: 'view', view: v })
-  const setTool = (t) => dispatch({ type: 'tool', tool: t })
+  const openPanel = (kind) => setOverride((p) => (p === kind ? null : kind))
+  const closePanel = () => { setOverride(null); dispatch({ type: 'select', sel: null }) }
 
   const addKind = (kind) => {
     let x = 0
@@ -40,7 +36,6 @@ export default function App() {
     if (selRoom) { x = selRoom.x + selRoom.w / 2; z = selRoom.z + selRoom.d / 2 }
     else if (rooms.length) { const r = rooms[rooms.length - 1]; x = r.x + r.w / 2; z = r.z + r.d / 2 }
     dispatch({ type: 'addItem', kind, x, z })
-    setSheet(null)
     haptic(10)
     flash('Added — drag to position')
   }
@@ -80,116 +75,34 @@ export default function App() {
         </div>
 
         <div className="seg" role="tablist" aria-label="View mode">
-          <button className={view === '2d' ? 'active' : ''} onClick={() => setView('2d')} aria-pressed={view === '2d'}>
-            <IconPlan size={15} /> Plan
-          </button>
-          <button className={view === 'side' ? 'active' : ''} onClick={() => setView('side')} aria-pressed={view === 'side'}>
-            <IconSide size={15} /> Side
-          </button>
-          <button className={view === '3d' ? 'active' : ''} onClick={() => setView('3d')} aria-pressed={view === '3d'}>
-            <IconCube size={15} /> 3D
-          </button>
+          <button className={view === '2d' ? 'active' : ''} onClick={() => setView('2d')} aria-pressed={view === '2d'}><IconPlan size={15} /> Plan</button>
+          <button className={view === 'side' ? 'active' : ''} onClick={() => setView('side')} aria-pressed={view === 'side'}><IconSide size={15} /> Side</button>
+          <button className={view === '3d' ? 'active' : ''} onClick={() => setView('3d')} aria-pressed={view === '3d'}><IconCube size={15} /> 3D</button>
         </div>
 
         <div className="tools">
+          <button className="tool" disabled={!canUndo} onClick={() => dispatch({ type: 'undo' })} aria-label="Undo"><IconUndo size={18} /></button>
+          <button className="tool" disabled={!canRedo} onClick={() => dispatch({ type: 'redo' })} aria-label="Redo"><IconRedo size={18} /></button>
           <button className="tool" onClick={exportView} aria-label="Export image"><IconShare size={18} /></button>
         </div>
       </header>
 
-      <main className="stage">
-        {view === '2d' ? <Editor2D /> : view === 'side' ? <ElevationEditor /> : <Scene3D />}
+      <div className="body">
+        <Rail onOpen={openPanel} activePanel={panel} />
 
-        {/* tool switcher (2D only) */}
-        {view === '2d' && (
-          <div className="toolbar">
-            <button className={tool === 'select' ? 'active' : ''} onClick={() => setTool('select')}><IconCursor size={16} /> Select</button>
-            <button className={tool === 'room' ? 'active' : ''} onClick={() => setTool('room')}><IconSquare size={16} /> Room</button>
-            <button className={tool === 'wall' ? 'active' : ''} onClick={() => setTool('wall')}><IconWall size={16} /> Wall</button>
-          </div>
+        <main className="stage">
+          {view === '2d' ? <Editor2D /> : view === 'side' ? <ElevationEditor /> : <Scene3D />}
+        </main>
+
+        {panel && (
+          <Panel kind={panel} onClose={closePanel} onFlash={flash} onPick={addKind} />
         )}
-
-        <div className="undo-cluster">
-          <button className="tool" disabled={!canUndo} onClick={() => dispatch({ type: 'undo' })} aria-label="Undo"><IconUndo size={18} /></button>
-          <button className="tool" disabled={!canRedo} onClick={() => dispatch({ type: 'redo' })} aria-label="Redo"><IconRedo size={18} /></button>
-        </div>
-
-        {selected && !(view === '2d' && tool !== 'select') && !(view === 'side' && selected.type !== 'builtin') && (() => {
-          const rw = selected.type === 'roomwall' ? rooms.find((r) => r.uid === selected.uid) : null
-          const rwOn = rw ? !rw.wallsOn || rw.wallsOn[selected.side] !== false : true
-          const toggleWall = () => {
-            if (!rw) return
-            const next = { ...(rw.wallsOn || {}), [selected.side]: !rwOn }
-            dispatch({ type: 'update', sel: { type: 'room', uid: rw.uid }, patch: { wallsOn: next } })
-            haptic(10)
-            flash(rwOn ? 'Wall removed' : 'Wall added')
-          }
-          return (
-            <ActionBar
-              type={selected.type}
-              wallOn={rwOn}
-              onToggle={toggleWall}
-              onRotate={() => { if (selected.type === 'item') { const it = items.find((i) => i.uid === selected.uid); dispatch({ type: 'update', sel: selected, patch: { rot: ((it?.rot || 0) + 90) % 360 } }); haptic(6) } }}
-              onDup={() => { dispatch({ type: 'duplicate', sel: selected }); haptic(8); flash('Duplicated') }}
-              onEdit={() => setSheet('inspector')}
-              onDelete={() => { dispatch({ type: 'remove', sel: selected }); haptic(12); flash('Removed') }}
-            />
-          )
-        })()}
-      </main>
-
-      <nav className="dock">
-        <button className="pill accent" onClick={() => { dispatch({ type: 'select', sel: null }); setSheet('catalog') }}>
-          <IconPlus size={19} /> <span className="pill-label">Add Furniture</span>
-        </button>
-        <button className="pill" onClick={() => setSheet('settings')}>
-          <IconTune size={19} /> <span className="pill-label">Settings</span>
-        </button>
-      </nav>
+      </div>
 
       {toast && <div className="toast" key={toast.t}>{toast.msg}</div>}
 
-      {sheet === 'catalog' && (
-        <Sheet onClose={() => setSheet(null)}><Catalog onPick={addKind} /></Sheet>
-      )}
-      {sheet === 'settings' && (
-        <Sheet onClose={() => setSheet(null)}><SettingsSheet onFlash={flash} onClose={() => setSheet(null)} /></Sheet>
-      )}
-      {sheet === 'inspector' && selected && (
-        <Sheet onClose={() => setSheet(null)}><Inspector onClose={() => setSheet(null)} onFlash={flash} /></Sheet>
-      )}
+      <RotateGate />
     </div>
-  )
-}
-
-function ActionBar({ type, wallOn, onToggle, onRotate, onDup, onEdit, onDelete }) {
-  if (type === 'roomwall') {
-    return (
-      <div className="fab-col">
-        {wallOn
-          ? <button className="fab" onClick={onToggle} aria-label="Delete wall" style={{ color: 'var(--danger)' }}><IconTrash size={20} /></button>
-          : <button className="fab primary" onClick={onToggle} aria-label="Add wall"><IconPlus size={20} /></button>}
-      </div>
-    )
-  }
-  return (
-    <div className="fab-col">
-      {type === 'item' && <button className="fab" onClick={onRotate} aria-label="Rotate"><IconRotate size={20} /></button>}
-      <button className="fab" onClick={onDup} aria-label="Duplicate"><IconCopy size={20} /></button>
-      <button className="fab primary" onClick={onEdit} aria-label="Edit"><IconTune size={20} /></button>
-      <button className="fab" onClick={onDelete} aria-label="Delete" style={{ color: 'var(--danger)' }}><IconTrash size={20} /></button>
-    </div>
-  )
-}
-
-function Sheet({ children, onClose }) {
-  return (
-    <>
-      <div className="scrim" onClick={onClose} />
-      <div className="sheet" role="dialog" aria-modal="true">
-        <div className="grip" />
-        {children}
-      </div>
-    </>
   )
 }
 
@@ -207,7 +120,7 @@ function svgToPng(svg) {
       canvas.width = w * scale
       canvas.height = h * scale
       const ctx = canvas.getContext('2d')
-      ctx.fillStyle = '#13161c'
+      ctx.fillStyle = '#ffffff'
       ctx.fillRect(0, 0, canvas.width, canvas.height)
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
       resolve(canvas.toDataURL('image/png'))

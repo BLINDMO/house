@@ -1,6 +1,8 @@
 # Honeycutt Room Studio
 
-A premium, installable **PWA** for drawing rooms and walls and designing them in **2D and 3D** — right from your phone.
+A premium, installable **PWA** for drawing rooms and walls and designing them in **2D and 3D**.
+
+**Landscape-only**, with a desktop-style studio layout: a left tool rail, a centered canvas, and a right properties panel that opens on selection (portrait shows a rotate prompt). The 3D view uses post-processing (ambient occlusion + anti-aliasing) for richer renders.
 
 ![Honeycutt Room Studio](public/icon-192.png)
 

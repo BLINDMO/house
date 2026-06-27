@@ -26,6 +26,27 @@ export default function Inspector({ onClose, onFlash }) {
   const del = () => { dispatch({ type: 'remove', sel }); onFlash?.('Removed'); onClose() }
   const dup = () => { dispatch({ type: 'duplicate', sel }); onFlash?.('Duplicated'); onClose() }
 
+  if (sel.type === 'roomwall') {
+    const room = rooms.find((r) => r.uid === sel.uid)
+    if (!room) return null
+    const names = { n: 'North', e: 'East', s: 'South', w: 'West' }
+    const on = !room.wallsOn || room.wallsOn[sel.side] !== false
+    const toggle = () => dispatch({ type: 'update', sel: { type: 'room', uid: room.uid }, patch: { wallsOn: { ...(room.wallsOn || {}), [sel.side]: !on } } })
+    return (
+      <>
+        <Head title="Wall section" sub={`${names[sel.side]} wall of this room`} />
+        <div className="insp">
+          <div className="row"><div className="label">Status</div><div className="val">{on ? 'Closed' : 'Open (doorway)'}</div></div>
+          <div className="btn-row">
+            {on
+              ? <button className="btn danger" onClick={toggle}><IconTrash size={18} /> Remove wall</button>
+              : <button className="btn accent" onClick={toggle}>Add wall back</button>}
+          </div>
+        </div>
+      </>
+    )
+  }
+
   if (sel.type === 'item') {
     const item = items.find((i) => i.uid === sel.uid)
     const c = item && CATALOG_BY_TYPE[item.type]
@@ -192,14 +213,13 @@ export default function Inspector({ onClose, onFlash }) {
 
 const activeChip = { color: 'var(--accent)', borderColor: 'var(--accent-line)', background: 'var(--accent-soft)' }
 
-function Head({ title, sub, onClose }) {
+function Head({ title, sub }) {
   return (
     <div className="sheet-head">
       <div>
         <h2>{title}</h2>
         <div className="sub">{sub}</div>
       </div>
-      <button className="close" onClick={onClose} aria-label="Close">✕</button>
     </div>
   )
 }

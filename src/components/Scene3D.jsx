@@ -2,6 +2,11 @@ import React, { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js'
+import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js'
 import { useStore } from '../store.jsx'
 import { useAssets } from '../assets.jsx'
 import { CATALOG_BY_TYPE } from '../data/catalog.js'
@@ -134,13 +139,33 @@ export default function Scene3D() {
     const key = new THREE.DirectionalLight('#fff4e0', 2.0)
     key.position.set(8, 14, 6)
     key.castShadow = true
-    key.shadow.mapSize.set(2048, 2048)
+    key.shadow.mapSize.set(4096, 4096)
     key.shadow.camera.near = 1; key.shadow.camera.far = 80
-    key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02
+    key.shadow.bias = -0.0003; key.shadow.normalBias = 0.02
+    key.shadow.radius = 4
     const sc = key.shadow.camera
     sc.left = -20; sc.right = 20; sc.top = 20; sc.bottom = -20
     scene.add(key)
     const fill = new THREE.DirectionalLight('#cdddff', 0.5); fill.position.set(-9, 7, -5); scene.add(fill)
+
+    // post-processing for richer renders (ambient occlusion + crisp AA)
+    let composer = null
+    let gtao = null
+    try {
+      composer = new EffectComposer(renderer)
+      composer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+      composer.setSize(W, H)
+      composer.addPass(new RenderPass(scene, camera))
+      gtao = new GTAOPass(scene, camera, W, H)
+      gtao.output = GTAOPass.OUTPUT.Default
+      gtao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 1, thickness: 1, scale: 1.1, samples: 16, screenSpaceRadius: false })
+      gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 4, radiusExponent: 1, rings: 2, samples: 16 })
+      composer.addPass(gtao)
+      composer.addPass(new SMAAPass(W, H))
+      composer.addPass(new OutputPass())
+    } catch {
+      composer = null
+    }
 
     // ground + grid
     const ground = new THREE.Mesh(
@@ -190,7 +215,7 @@ export default function Scene3D() {
 
     Object.assign(refs.current, {
       renderer, scene, camera, controls, roomGroup, furnitureGroup,
-      key, fill, ambient, hemi, pmrem, ring, gizmo, builtinGroup,
+      key, fill, ambient, hemi, pmrem, ring, gizmo, builtinGroup, composer, gtao,
       woodCache: new Map(), imgCache: new Map(), roomTexList: [], walls: [], itemMap: new Map(), framed: false,
       raycaster: new THREE.Raycaster(), drag: null, rotate: null, pending: null,
     })
@@ -287,7 +312,8 @@ export default function Scene3D() {
         else if (w.hidden && d < -0.1) w.hidden = false
         w.mesh.visible = !w.hidden
       }
-      renderer.render(scene, camera)
+      if (composer) composer.render()
+      else renderer.render(scene, camera)
       raf = requestAnimationFrame(tick)
     }
     tick()
@@ -295,6 +321,7 @@ export default function Scene3D() {
     const ro = new ResizeObserver(() => {
       const w = mount.clientWidth; const h = mount.clientHeight
       renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix()
+      composer?.setSize(w, h)
     })
     ro.observe(mount)
 
@@ -310,6 +337,7 @@ export default function Scene3D() {
       refs.current.woodCache.forEach((t) => t.dispose())
       refs.current.imgCache.forEach((t) => t.dispose())
       refs.current.roomTexList.forEach((t) => t.dispose())
+      composer?.dispose?.()
       pmrem.dispose(); renderer.dispose()
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement)
     }
@@ -513,13 +541,6 @@ export default function Scene3D() {
 
   return (
     <div className="scene3d" ref={mountRef}>
-      <div className="ambiance">
-        {['day', 'dusk', 'night'].map((a) => (
-          <button key={a} className={ambiance === a ? 'active' : ''} onClick={() => dispatch({ type: 'ambiance', value: a })}>
-            {a[0].toUpperCase() + a.slice(1)}
-          </button>
-        ))}
-      </div>
       <button className="recenter" onClick={reframe} aria-label="Recenter view"><IconCenter size={20} /></button>
     </div>
   )
