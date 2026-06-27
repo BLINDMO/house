@@ -2,13 +2,73 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useStore } from '../store.jsx'
 import { formatLen } from '../util.js'
 import { wallGeometry, listWalls, refEq } from '../wall.js'
-import { IconCursor, IconSquare, IconCenter } from './Icons.jsx'
+import { IconCursor, IconSquare, IconWall, IconCenter } from './Icons.jsx'
 
 const ACCENT = '#d9b779'
 const GRID = 0.05
 const HANDLE_HIT = 18
 const snap = (v, g) => Math.round(v / g) * g
 const clampV = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+const distToSeg = (px, pz, x1, z1, x2, z2) => {
+  const dx = x2 - x1
+  const dz = z2 - z1
+  const l2 = dx * dx + dz * dz || 1e-6
+  let t = ((px - x1) * dx + (pz - z1) * dz) / l2
+  t = clampV(t, 0, 1)
+  return Math.hypot(px - (x1 + t * dx), pz - (z1 + t * dz))
+}
+
+const WOOD = { color: '#c79a6b', tex: 'wood:oak' }
+const WALNUT = { color: '#7a543a', tex: 'wood:walnut' }
+const COUNTER = { color: '#d7d2c8', tex: 'stone:white' }
+
+export const PRESETS = [
+  { id: 'bunk', name: 'Bunk bed' },
+  { id: 'base', name: 'Base cabinets' },
+  { id: 'upper', name: 'Upper cabinets' },
+  { id: 'cubby', name: 'Cubby wall' },
+  { id: 'shelves', name: 'Open shelves' },
+  { id: 'wardrobe', name: 'Wardrobe' },
+]
+
+function buildPreset(id, geom, ref) {
+  const L = geom.length
+  const H = geom.height
+  const out = []
+  const add = (u, v, w, h, depth, kind = 'panel', fin = WOOD) =>
+    out.push({ wall: ref, u: Math.max(0, u), v: Math.max(0, v), w, h, depth, kind, color: fin.color, tex: fin.tex })
+  if (id === 'bunk') {
+    const len = Math.min(L, 2.03)
+    const bw = 1.0
+    add(0, 0, 0.1, 1.85, bw)
+    add(len - 0.1, 0, 0.1, 1.85, bw)
+    add(0, 0.35, len, 0.12, bw)
+    add(0, 1.45, len, 0.12, bw)
+    add(0, 1.6, len, 0.32, 0.05)
+  } else if (id === 'base') {
+    const cab = 0.6
+    const n = Math.max(1, Math.floor(L / cab))
+    const run = n * cab
+    for (let i = 0; i < n; i++) add(i * cab, 0, cab - 0.01, 0.9, 0.6)
+    add(0, 0.9, run, 0.04, 0.64, 'panel', COUNTER)
+  } else if (id === 'upper') {
+    const cab = 0.6
+    const n = Math.max(1, Math.floor(L / cab))
+    for (let i = 0; i < n; i++) add(i * cab, 1.45, cab - 0.01, 0.7, 0.32)
+  } else if (id === 'cubby' || id === 'shelves') {
+    const cols = id === 'shelves' ? 1 : clampV(Math.round(L / 0.5), 2, 6)
+    const rows = clampV(Math.round((H * 0.85) / 0.45), 2, 6)
+    const cw = L / cols
+    const ch = Math.min(0.5, (H * 0.85) / rows)
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) add(c * cw, r * ch, cw, ch, 0.4, 'cubby')
+  } else if (id === 'wardrobe') {
+    const ww = Math.min(L, 1.2)
+    const wh = Math.min(H, 2.0)
+    add(0, 0, ww / 2 - 0.005, wh, 0.6, 'panel', WALNUT)
+    add(ww / 2, 0, ww / 2, wh, 0.6, 'panel', WALNUT)
+  }
+  return out
+}
 
 export default function ElevationEditor() {
   const { state, dispatch } = useStore()
@@ -19,6 +79,7 @@ export default function ElevationEditor() {
   const [xf, setXf] = useState({ scale: 64, panX: 60, panY: 460, init: false })
   const [eTool, setETool] = useState('box')
   const [wallIdx, setWallIdx] = useState(0)
+  const [menu, setMenu] = useState(false)
   const [gesture, setGesture] = useState(null)
   const gestureRef = useRef(null)
   gestureRef.current = gesture
@@ -32,7 +93,6 @@ export default function ElevationEditor() {
   const current = list[idx]
   const geom = current ? wallGeometry(current.ref, rooms, walls) : null
 
-  // sync to a wall selected in plan view, once
   const synced = useRef(false)
   useEffect(() => {
     if (synced.current || !list.length) return
@@ -60,10 +120,9 @@ export default function ElevationEditor() {
   const toWorld = (px, py) => [(px - panX) / scale, (panY - py) / scale]
   const ptr = (e) => { const r = svgRef.current.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top] }
 
-  // fit the wall face into view
   function fitView() {
     if (!geom || !W) { setXf((s) => ({ ...s, init: true })); return }
-    const pad = 64
+    const pad = 70
     const ns = clampV(Math.min((W - 2 * pad) / Math.max(0.5, geom.length), (H - 2 * pad) / Math.max(0.5, geom.height)), 14, 200)
     setXf({ scale: ns, panX: W / 2 - (geom.length / 2) * ns, panY: H / 2 + (geom.height / 2) * ns, init: true })
   }
@@ -74,24 +133,32 @@ export default function ElevationEditor() {
   const selB = selected?.type === 'builtin' ? builtins.find((b) => b.uid === selected.uid) : null
   const selMine = selB && geom && refEq(selB.wall, current.ref) ? selB : null
 
-  function builtinCorners(b) {
-    return [toScreen(b.u, b.v), toScreen(b.u + b.w, b.v), toScreen(b.u + b.w, b.v + b.h), toScreen(b.u, b.v + b.h)]
-  }
+  const rectCorners = (b) => [toScreen(b.u, b.v), toScreen(b.u + b.w, b.v), toScreen(b.u + b.w, b.v + b.h), toScreen(b.u, b.v + b.h)]
+
   function hitTest(px, py) {
     const [u, v] = toWorld(px, py)
     if (selMine) {
-      const cs = builtinCorners(selMine)
-      const opp = [2, 3, 0, 1]
-      for (let i = 0; i < 4; i++) {
-        if (Math.hypot(px - cs[i][0], py - cs[i][1]) < HANDLE_HIT) {
-          const o = builtinCorners(selMine)[opp[i]]
-          return { kind: 'b-handle', fixedU: (o[0] - panX) / scale, fixedV: (panY - o[1]) / scale }
+      if (selMine.kind === 'board') {
+        for (const end of ['1', '2']) {
+          const [hx, hy] = toScreen(selMine['u' + end], selMine['v' + end])
+          if (Math.hypot(px - hx, py - hy) < HANDLE_HIT) return { kind: 'b-end', end }
+        }
+      } else {
+        const cs = rectCorners(selMine)
+        const opp = [2, 3, 0, 1]
+        for (let i = 0; i < 4; i++) {
+          if (Math.hypot(px - cs[i][0], py - cs[i][1]) < HANDLE_HIT) {
+            const o = rectCorners(selMine)[opp[i]]
+            return { kind: 'b-handle', fixedU: (o[0] - panX) / scale, fixedV: (panY - o[1]) / scale }
+          }
         }
       }
     }
     for (let i = mine.length - 1; i >= 0; i--) {
       const b = mine[i]
-      if (u >= b.u && u <= b.u + b.w && v >= b.v && v <= b.v + b.h) return { kind: 'builtin', uid: b.uid }
+      if (b.kind === 'board') {
+        if (distToSeg(u, v, b.u1, b.v1, b.u2, b.v2) <= b.thickness / 2 + 0.1) return { kind: 'builtin', uid: b.uid }
+      } else if (u >= b.u && u <= b.u + b.w && v >= b.v && v <= b.v + b.h) return { kind: 'builtin', uid: b.uid }
     }
     return { kind: 'empty' }
   }
@@ -116,15 +183,21 @@ export default function ElevationEditor() {
       setGesture({ kind: 'drawBox', u0: snap(u, GRID), v0: snap(v, GRID), cur: { u: snap(u, GRID), v: snap(v, GRID), w: 0, h: 0 } })
       return
     }
+    if (eTool === 'line') {
+      const su = snap(u, GRID)
+      const sv = snap(v, GRID)
+      setGesture({ kind: 'drawLine', u1: su, v1: sv, cur: { u1: su, v1: sv, u2: su, v2: sv } })
+      return
+    }
     const h = hitTest(px, py)
     if (h.kind === 'b-handle') setGesture({ kind: 'resizeB', uid: selMine.uid, fixedU: h.fixedU, fixedV: h.fixedV })
+    else if (h.kind === 'b-end') setGesture({ kind: 'endB', uid: selMine.uid, end: h.end })
     else if (h.kind === 'builtin') {
       const b = mine.find((o) => o.uid === h.uid)
       dispatch({ type: 'select', sel: { type: 'builtin', uid: h.uid } })
-      setGesture({ kind: 'moveB', uid: h.uid, ou: u - b.u, ov: v - b.v })
-    } else {
-      setGesture({ kind: 'pan', sx: px, sy: py, panX: xfRef.current.panX, panY: xfRef.current.panY, moved: false })
-    }
+      if (b.kind === 'board') setGesture({ kind: 'moveBoard', uid: h.uid, pu: u, pv: v, u1: b.u1, v1: b.v1, u2: b.u2, v2: b.v2 })
+      else setGesture({ kind: 'moveB', uid: h.uid, ou: u - b.u, ov: v - b.v })
+    } else setGesture({ kind: 'pan', sx: px, sy: py, panX: xfRef.current.panX, panY: xfRef.current.panY, moved: false })
   }
 
   const onMove = (e) => {
@@ -150,8 +223,21 @@ export default function ElevationEditor() {
       const u1 = snap(u, GRID)
       const v1 = snap(v, GRID)
       setGesture((s) => ({ ...s, cur: { u: Math.min(s.u0, u1), v: Math.min(s.v0, v1), w: Math.abs(u1 - s.u0), h: Math.abs(v1 - s.v0) } }))
+    } else if (g.kind === 'drawLine') {
+      let u2 = snap(u, GRID)
+      let v2 = snap(v, GRID)
+      if (Math.abs(u2 - g.u1) < 0.08) u2 = g.u1 // snap to vertical
+      if (Math.abs(v2 - g.v1) < 0.08) v2 = g.v1 // snap to horizontal
+      setGesture((s) => ({ ...s, cur: { u1: s.u1, v1: s.v1, u2, v2 } }))
     } else if (g.kind === 'moveB') {
       dispatch({ type: 'update', sel: { type: 'builtin', uid: g.uid }, patch: { u: snap(u - g.ou, GRID), v: snap(v - g.ov, GRID) }, mergeKey: `mb:${g.uid}` })
+    } else if (g.kind === 'moveBoard') {
+      const du = snap(u - g.pu, GRID)
+      const dv = snap(v - g.pv, GRID)
+      dispatch({ type: 'update', sel: { type: 'builtin', uid: g.uid }, patch: { u1: g.u1 + du, v1: g.v1 + dv, u2: g.u2 + du, v2: g.v2 + dv }, mergeKey: `mb:${g.uid}` })
+    } else if (g.kind === 'endB') {
+      const patch = g.end === '1' ? { u1: snap(u, GRID), v1: snap(v, GRID) } : { u2: snap(u, GRID), v2: snap(v, GRID) }
+      dispatch({ type: 'update', sel: { type: 'builtin', uid: g.uid }, patch, mergeKey: `eb:${g.uid}` })
     } else if (g.kind === 'resizeB') {
       const u1 = snap(u, GRID)
       const v1 = snap(v, GRID)
@@ -163,10 +249,12 @@ export default function ElevationEditor() {
     pointers.current.delete(e.pointerId)
     if (pointers.current.size < 2) pinch.current = null
     const g = gestureRef.current
-    if (g) {
+    if (g && geom) {
       if (g.kind === 'drawBox' && g.cur.w > 0.1 && g.cur.h > 0.1) {
-        dispatch({ type: 'addBuiltin', wall: current.ref, u: g.cur.u, v: g.cur.v, w: g.cur.w, h: g.cur.h, depth: 0.5, kind: 'cubby' })
+        dispatch({ type: 'addBuiltin', builtin: { wall: current.ref, u: g.cur.u, v: g.cur.v, w: g.cur.w, h: g.cur.h, depth: 0.5, kind: 'cubby', color: WOOD.color, tex: WOOD.tex } })
         setETool('select')
+      } else if (g.kind === 'drawLine' && Math.hypot(g.cur.u2 - g.cur.u1, g.cur.v2 - g.cur.v1) > 0.05) {
+        dispatch({ type: 'addBuiltin', builtin: { wall: current.ref, kind: 'board', u1: g.cur.u1, v1: g.cur.v1, u2: g.cur.u2, v2: g.cur.v2, thickness: 0.05, depth: 0.04, color: WOOD.color, tex: WOOD.tex } })
       } else if (g.kind === 'pan' && !g.moved) {
         dispatch({ type: 'select', sel: null })
       }
@@ -181,17 +269,41 @@ export default function ElevationEditor() {
     setXf({ scale: ns, panX: px - ((px - v.panX) / v.scale) * ns, panY: py + ((v.panY - py) / v.scale) * ns, init: true })
   }
 
-  // grid (within the wall face only)
+  const addPreset = (id) => {
+    if (!geom) return
+    dispatch({ type: 'addBuiltins', list: buildPreset(id, geom, current.ref) })
+    setMenu(false)
+    setETool('select')
+  }
+
+  // grid + elevation furnishings
   const grid = []
+  const ruler = []
+  const hatch = []
+  let floorY = 0
+  let ceilY = 0
+  let gxA = 0
   if (geom) {
     for (let u = 0; u <= geom.length + 1e-6; u += 0.5) {
       const [sx] = toScreen(u, 0)
-      grid.push(<line key={`u${u.toFixed(2)}`} x1={sx} y1={toScreen(0, 0)[1]} x2={sx} y2={toScreen(0, geom.height)[1]} stroke="#000" strokeOpacity={Math.abs(u % 1) < 1e-6 ? 0.1 : 0.045} strokeWidth={1} />)
+      grid.push(<line key={`gu${u.toFixed(2)}`} x1={sx} y1={toScreen(0, 0)[1]} x2={sx} y2={toScreen(0, geom.height)[1]} stroke="#000" strokeOpacity={Math.abs(u % 1) < 1e-6 ? 0.1 : 0.045} strokeWidth={1} />)
     }
     for (let v = 0; v <= geom.height + 1e-6; v += 0.5) {
       const [, sy] = toScreen(0, v)
-      grid.push(<line key={`v${v.toFixed(2)}`} x1={toScreen(0, 0)[0]} y1={sy} x2={toScreen(geom.length, 0)[0]} y2={sy} stroke="#000" strokeOpacity={Math.abs(v % 1) < 1e-6 ? 0.1 : 0.045} strokeWidth={1} />)
+      grid.push(<line key={`gv${v.toFixed(2)}`} x1={toScreen(0, 0)[0]} y1={sy} x2={toScreen(geom.length, 0)[0]} y2={sy} stroke="#000" strokeOpacity={Math.abs(v % 1) < 1e-6 ? 0.1 : 0.045} strokeWidth={1} />)
     }
+    floorY = toScreen(0, 0)[1]
+    ceilY = toScreen(0, geom.height)[1]
+    gxA = toScreen(0, 0)[0]
+    const step = units === 'm' ? 0.5 : 0.3048
+    let k = 0
+    for (let v = 0; v <= geom.height + 1e-6; v += step, k++) {
+      const y = toScreen(0, v)[1]
+      const major = k % 2 === 0
+      ruler.push(<line key={`t${k}`} x1={gxA - 7} y1={y} x2={gxA} y2={y} stroke="#9aa1ab" strokeWidth={major ? 1.6 : 1} />)
+      if (major && v > 0.05) ruler.push(<text key={`rl${k}`} x={gxA - 10} y={y + 3} textAnchor="end" fontSize={9.5} fill="#8a92a0" fontFamily="-apple-system, system-ui, sans-serif">{formatLen(v, units)}</text>)
+    }
+    for (let x = gxA % 16; x < W; x += 16) hatch.push(<line key={`hx${x}`} x1={x} y1={floorY} x2={x - 10} y2={floorY + 12} stroke="#39414f" strokeOpacity={0.22} strokeWidth={1} />)
   }
 
   if (!list.length) {
@@ -209,45 +321,10 @@ export default function ElevationEditor() {
   const wPix = geom ? geom.length * scale : 0
   const hPix = geom ? geom.height * scale : 0
 
-  // elevation furnishings: floor baseline, hatch, height ruler, scale figure
-  const ruler = []
-  const hatch = []
-  const person = []
-  let floorY = 0
-  let ceilY = 0
-  let gxA = 0
-  if (geom) {
-    floorY = toScreen(0, 0)[1]
-    ceilY = toScreen(0, geom.height)[1]
-    gxA = toScreen(0, 0)[0]
-    const step = units === 'm' ? 0.5 : 0.3048
-    let k = 0
-    for (let v = 0; v <= geom.height + 1e-6; v += step, k++) {
-      const y = toScreen(0, v)[1]
-      const major = k % 2 === 0
-      ruler.push(<line key={`t${k}`} x1={gxA - 7} y1={y} x2={gxA} y2={y} stroke="#9aa1ab" strokeWidth={major ? 1.6 : 1} />)
-      if (major && v > 0.05) ruler.push(<text key={`rl${k}`} x={gxA - 10} y={y + 3} textAnchor="end" fontSize={9.5} fill="#8a92a0" fontFamily="-apple-system, system-ui, sans-serif">{formatLen(v, units)}</text>)
-    }
-    for (let x = gxA % 16; x < W; x += 16) hatch.push(<line key={`hx${x}`} x1={x} y1={floorY} x2={x - 10} y2={floorY + 12} stroke="#39414f" strokeOpacity={0.22} strokeWidth={1} />)
-    if (geom.height >= 1.7 && scale > 22) {
-      const pu = Math.min(0.55, geom.length * 0.25)
-      const P = (u, v) => toScreen(u, v)
-      const col = 'rgba(57,65,79,0.22)'
-      const sw = Math.max(2, 0.05 * scale)
-      const head = P(pu, 1.62)
-      person.push(<circle key="ph" cx={head[0]} cy={head[1]} r={0.1 * scale} fill="none" stroke={col} strokeWidth={sw} />)
-      const seg = (a, b, i) => { const A = P(...a); const B = P(...b); person.push(<line key={`ps${i}`} x1={A[0]} y1={A[1]} x2={B[0]} y2={B[1]} stroke={col} strokeWidth={sw} strokeLinecap="round" />) }
-      seg([pu, 1.52], [pu, 0.92], 0)
-      seg([pu - 0.2, 1.3], [pu + 0.2, 1.3], 1)
-      seg([pu, 0.92], [pu - 0.13, 0], 2)
-      seg([pu, 0.92], [pu + 0.13, 0], 3)
-    }
-  }
-
   return (
     <div className="editor2d elevation" ref={wrapRef}>
       <svg ref={svgRef} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onWheel={onWheel}
-        style={{ touchAction: 'none', cursor: eTool === 'box' ? 'crosshair' : 'default' }}>
+        style={{ touchAction: 'none', cursor: eTool === 'select' ? 'default' : 'crosshair' }}>
         <defs>
           <filter id="esh" x="-30%" y="-30%" width="160%" height="160%">
             <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000" floodOpacity="0.22" />
@@ -261,70 +338,73 @@ export default function ElevationEditor() {
 
         {geom && (
           <>
-            {/* wall face (vertical gradient reads as an upright surface) */}
             <rect x={wx0} y={wy0} width={wPix} height={hPix} fill="url(#wallgrad)" stroke="#39414f" strokeWidth={2.5} pointerEvents="none" />
-            {/* ceiling line */}
             <line x1={wx0} y1={ceilY} x2={wx0 + wPix} y2={ceilY} stroke="#39414f" strokeOpacity={0.5} strokeWidth={2} strokeDasharray="7 6" pointerEvents="none" />
             <g pointerEvents="none">{grid}</g>
-            {/* height ruler + scale figure */}
             <g pointerEvents="none">{ruler}</g>
-            <g pointerEvents="none">{person}</g>
-            {/* floor baseline across the whole view + ground hatch */}
             <line x1={0} y1={floorY} x2={W} y2={floorY} stroke="#39414f" strokeWidth={3.5} pointerEvents="none" />
             <g pointerEvents="none">{hatch}</g>
             <text x={wx0 + 7} y={floorY - 7} fontSize={10} fontWeight={700} letterSpacing="1.5" fill="#39414f" opacity={0.45} pointerEvents="none">FLOOR</text>
 
-            {/* dimension labels */}
-            <g pointerEvents="none" fontSize={11.5} fontWeight={700} fill="#20160a" fontFamily="-apple-system, system-ui, sans-serif">
-              <rect x={wx0 + wPix / 2 - 70} y={wy0 - 25} width={140} height={19} rx={9.5} fill={ACCENT} />
-              <text x={wx0 + wPix / 2} y={wy0 - 11} textAnchor="middle">{formatLen(geom.length, units)} wide</text>
-              <g transform={`translate(${wx0 - 16} ${wy0 + hPix / 2}) rotate(-90)`}>
-                <rect x={-58} y={-9} width={116} height={18} rx={9} fill={ACCENT} />
-                <text x={0} y={4} textAnchor="middle">{formatLen(geom.height, units)} tall</text>
-              </g>
-            </g>
-
             {/* built-ins */}
             {mine.map((b) => {
-              const [bx, by] = toScreen(b.u, b.v + b.h)
               const sel = selMine?.uid === b.uid
+              if (b.kind === 'board') {
+                const [ax, ay] = toScreen(b.u1, b.v1)
+                const [bx, by] = toScreen(b.u2, b.v2)
+                return <line key={b.uid} x1={ax} y1={ay} x2={bx} y2={by} stroke={sel ? ACCENT : b.color} strokeWidth={Math.max(4, b.thickness * scale)} strokeLinecap="round" pointerEvents="none" filter="url(#esh)" />
+              }
+              const [bx, by] = toScreen(b.u, b.v + b.h)
               const open = b.kind === 'cubby'
               return (
                 <g key={b.uid} pointerEvents="none">
-                  <rect x={bx} y={by} width={b.w * scale} height={b.h * scale}
-                    fill={open ? '#f6f3ec' : b.color}
-                    stroke={sel ? ACCENT : b.color}
-                    strokeWidth={open ? Math.max(4, 0.05 * scale) : 2}
-                    filter="url(#esh)" />
+                  <rect x={bx} y={by} width={b.w * scale} height={b.h * scale} fill={open ? '#f6f3ec' : b.color} stroke={sel ? ACCENT : b.color} strokeWidth={open ? Math.max(4, 0.05 * scale) : 2} filter="url(#esh)" />
                   {sel && <rect x={bx - 4} y={by - 4} width={b.w * scale + 8} height={b.h * scale + 8} rx={6} fill="none" stroke={ACCENT} strokeWidth={2} strokeDasharray="6 5" />}
                 </g>
               )
             })}
 
-            {/* draw preview */}
+            {/* previews */}
             {gesture?.kind === 'drawBox' && (() => {
               const [bx, by] = toScreen(gesture.cur.u, gesture.cur.v + gesture.cur.h)
               return (
                 <g pointerEvents="none">
                   <rect x={bx} y={by} width={gesture.cur.w * scale} height={gesture.cur.h * scale} fill={ACCENT} fillOpacity={0.12} stroke={ACCENT} strokeWidth={3} strokeDasharray="6 5" />
-                  <text x={bx + (gesture.cur.w * scale) / 2} y={by - 8} textAnchor="middle" fontSize={12} fontWeight={700} fill="#9a7327">
-                    {formatLen(gesture.cur.w, units)} × {formatLen(gesture.cur.h, units)}
-                  </text>
+                  <text x={bx + (gesture.cur.w * scale) / 2} y={by - 8} textAnchor="middle" fontSize={12} fontWeight={700} fill="#9a7327">{formatLen(gesture.cur.w, units)} × {formatLen(gesture.cur.h, units)}</text>
+                </g>
+              )
+            })()}
+            {gesture?.kind === 'drawLine' && (() => {
+              const [ax, ay] = toScreen(gesture.cur.u1, gesture.cur.v1)
+              const [bx, by] = toScreen(gesture.cur.u2, gesture.cur.v2)
+              const len = Math.hypot(gesture.cur.u2 - gesture.cur.u1, gesture.cur.v2 - gesture.cur.v1)
+              return (
+                <g pointerEvents="none">
+                  <line x1={ax} y1={ay} x2={bx} y2={by} stroke={ACCENT} strokeWidth={6} strokeLinecap="round" strokeDasharray="8 6" />
+                  <text x={(ax + bx) / 2} y={(ay + by) / 2 - 8} textAnchor="middle" fontSize={12} fontWeight={700} fill="#9a7327">{formatLen(len, units)}</text>
                 </g>
               )
             })()}
 
-            {/* selected built-in: handles + badge */}
-            {selMine && (() => {
-              const cs = builtinCorners(selMine)
+            {/* selection handles */}
+            {selMine && selMine.kind === 'board' && (() => {
+              const [ax, ay] = toScreen(selMine.u1, selMine.v1)
+              const [bx, by] = toScreen(selMine.u2, selMine.v2)
+              return (
+                <g pointerEvents="none">
+                  <circle cx={ax} cy={ay} r={7} fill="#fff" stroke={ACCENT} strokeWidth={2.5} filter="url(#esh)" />
+                  <circle cx={bx} cy={by} r={7} fill="#fff" stroke={ACCENT} strokeWidth={2.5} filter="url(#esh)" />
+                </g>
+              )
+            })()}
+            {selMine && selMine.kind !== 'board' && (() => {
+              const cs = rectCorners(selMine)
               const [bx, by] = toScreen(selMine.u + selMine.w / 2, selMine.v + selMine.h)
               return (
                 <g pointerEvents="none">
                   {cs.map(([hx, hy], i) => <circle key={i} cx={hx} cy={hy} r={7} fill="#fff" stroke={ACCENT} strokeWidth={2.5} filter="url(#esh)" />)}
                   <rect x={bx - 78} y={by - 28} width={156} height={20} rx={10} fill={ACCENT} />
-                  <text x={bx} y={by - 14} textAnchor="middle" fontSize={11.5} fontWeight={700} fill="#20160a" fontFamily="-apple-system, system-ui, sans-serif">
-                    {formatLen(selMine.w, units)} × {formatLen(selMine.h, units)}
-                  </text>
+                  <text x={bx} y={by - 14} textAnchor="middle" fontSize={11.5} fontWeight={700} fill="#20160a" fontFamily="-apple-system, system-ui, sans-serif">{formatLen(selMine.w, units)} × {formatLen(selMine.h, units)}</text>
                 </g>
               )
             })()}
@@ -332,25 +412,34 @@ export default function ElevationEditor() {
         )}
       </svg>
 
-      {/* wall picker */}
       <div className="wall-picker">
         <button onClick={() => setWallIdx((idx - 1 + list.length) % list.length)} aria-label="Previous wall">‹</button>
         <span>{current?.label}</span>
         <button onClick={() => setWallIdx((idx + 1) % list.length)} aria-label="Next wall">›</button>
       </div>
 
-      {/* tool switcher */}
       <div className="toolbar" style={{ top: 60 }}>
         <button className={eTool === 'select' ? 'active' : ''} onClick={() => setETool('select')}><IconCursor size={16} /> Select</button>
         <button className={eTool === 'box' ? 'active' : ''} onClick={() => setETool('box')}><IconSquare size={16} /> Box</button>
+        <button className={eTool === 'line' ? 'active' : ''} onClick={() => setETool('line')}><IconWall size={16} /> Board</button>
+        <button className={menu ? 'active' : ''} onClick={() => setMenu((m) => !m)}>✨ Presets</button>
       </div>
+
+      {menu && (
+        <div className="preset-menu">
+          {PRESETS.map((p) => (
+            <button key={p.id} onClick={() => addPreset(p.id)}>{p.name}</button>
+          ))}
+        </div>
+      )}
 
       <button className="recenter" onClick={fitView} aria-label="Fit to view"><IconCenter size={20} /></button>
 
       <div className="hint">
-        {eTool === 'box' ? 'Drag to add a box, shelf or cubby on this wall'
-          : selMine ? 'Drag to move · drag corners to resize · edit for depth & style'
-          : 'Tap a box to select · use ‹ › to switch walls'}
+        {eTool === 'box' ? 'Drag to add a box or cubby'
+          : eTool === 'line' ? 'Drag to draw a wood board / slat'
+          : selMine ? 'Drag to move · drag handles to resize · edit for depth & finish'
+          : 'Tap a piece to select · ‹ › switches walls · ✨ for presets'}
       </div>
     </div>
   )

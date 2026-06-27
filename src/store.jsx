@@ -61,7 +61,8 @@ function clampWall(n) {
 function clampBuiltin(n) {
   if (n.w != null) n.w = clamp(n.w, 0.1, 12)
   if (n.h != null) n.h = clamp(n.h, 0.1, 6)
-  if (n.depth != null) n.depth = clamp(n.depth, 0.05, 3)
+  if (n.depth != null) n.depth = clamp(n.depth, 0.02, 3)
+  if (n.thickness != null) n.thickness = clamp(n.thickness, 0.01, 0.4)
   return n
 }
 
@@ -114,12 +115,13 @@ function reducer(state, action) {
     }
 
     case 'addBuiltin': {
-      const b = clampBuiltin({
-        uid: uid(), wall: action.wall, u: action.u, v: action.v,
-        w: action.w, h: action.h, depth: action.depth ?? 0.4,
-        color: action.color ?? '#c7ad84', kind: action.kind ?? 'cubby',
-      })
+      const b = clampBuiltin({ uid: uid(), kind: 'cubby', depth: 0.4, color: '#c7ad84', ...action.builtin })
       return { ...state, builtins: [...state.builtins, b], selected: { type: 'builtin', uid: b.uid } }
+    }
+
+    case 'addBuiltins': {
+      const list = action.list.map((b) => clampBuiltin({ uid: uid(), depth: 0.4, color: '#c79a6b', kind: 'panel', ...b }))
+      return { ...state, builtins: [...state.builtins, ...list], selected: list.length ? { type: 'builtin', uid: list[list.length - 1].uid } : state.selected }
     }
 
     case 'addItem': {
@@ -149,7 +151,9 @@ function reducer(state, action) {
       if (!src) return state
       let copy
       if (type === 'wall') copy = { ...src, uid: uid(), x1: src.x1 + 0.3, z1: src.z1 + 0.3, x2: src.x2 + 0.3, z2: src.z2 + 0.3 }
-      else if (type === 'builtin') copy = { ...src, uid: uid(), u: src.u + 0.3, v: src.v + 0.3 }
+      else if (type === 'builtin') copy = src.kind === 'board'
+        ? { ...src, uid: uid(), u1: src.u1 + 0.3, v1: src.v1 + 0.3, u2: src.u2 + 0.3, v2: src.v2 + 0.3 }
+        : { ...src, uid: uid(), u: src.u + 0.3, v: src.v + 0.3 }
       else copy = { ...src, uid: uid(), x: src.x + 0.3, z: src.z + 0.3 }
       return { ...state, [key]: [...state[key], copy], selected: { type, uid: copy.uid } }
     }
@@ -166,7 +170,7 @@ function reducer(state, action) {
 }
 
 // ---- history wrapper (undo / redo with drag coalescing) ----
-const HISTORIC = new Set(['addRoom', 'addWall', 'addItem', 'addBuiltin', 'update', 'remove', 'duplicate', 'clear', 'reset', 'defaultHeight'])
+const HISTORIC = new Set(['addRoom', 'addWall', 'addItem', 'addBuiltin', 'addBuiltins', 'update', 'remove', 'duplicate', 'clear', 'reset', 'defaultHeight'])
 const LIMIT = 80
 
 function root(c, action) {

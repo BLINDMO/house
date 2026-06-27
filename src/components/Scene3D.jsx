@@ -378,6 +378,31 @@ export default function Scene3D() {
     for (const b of builtins) {
       const geom = wallGeometry(b.wall, rooms, walls)
       if (!geom) continue
+      const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(b.color || '#c7ad84'), roughness: 0.62, metalness: 0.04 })
+
+      // board / slat: a thin beam between two points in the wall plane
+      if (b.kind === 'board') {
+        const um = (b.u1 + b.u2) / 2
+        const vm = (b.v1 + b.v2) / 2
+        const du = b.u2 - b.u1
+        const dv = b.v2 - b.v1
+        const len = Math.hypot(du, dv) || 1e-6
+        const cos = du / len
+        const sin = dv / len
+        const longA = new THREE.Vector3(geom.dirx * cos, sin, geom.dirz * cos)
+        const thickA = new THREE.Vector3(-geom.dirx * sin, cos, -geom.dirz * sin)
+        const depthA = new THREE.Vector3(geom.nx, 0, geom.nz)
+        const MB = new THREE.Matrix4().makeBasis(longA, thickA, depthA)
+        MB.setPosition(geom.ox + geom.dirx * um + geom.nx * (b.depth / 2), vm, geom.oz + geom.dirz * um + geom.nz * (b.depth / 2))
+        const beam = new THREE.Mesh(new THREE.BoxGeometry(len, b.thickness || 0.05, b.depth || 0.04), mat)
+        beam.castShadow = true
+        beam.receiveShadow = true
+        beam.matrixAutoUpdate = false
+        beam.matrix.copy(MB)
+        r.builtinGroup.add(beam)
+        continue
+      }
+
       const M = new THREE.Matrix4()
       const dir = new THREE.Vector3(geom.dirx, 0, geom.dirz)
       const up = new THREE.Vector3(0, 1, 0)
@@ -389,7 +414,6 @@ export default function Scene3D() {
         b.v + b.h / 2,
         geom.oz + geom.dirz * along + geom.nz * (b.depth / 2)
       )
-      const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(b.color || '#c7ad84'), roughness: 0.62, metalness: 0.04 })
       const node = new THREE.Group()
       node.matrixAutoUpdate = false
       node.matrix.copy(M)

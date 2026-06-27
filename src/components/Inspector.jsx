@@ -106,6 +106,31 @@ export default function Inspector({ onClose, onFlash }) {
   if (sel.type === 'builtin') {
     const b = builtins.find((o) => o.uid === sel.uid)
     if (!b) return null
+    if (b.kind === 'board') {
+      const len = Math.hypot(b.u2 - b.u1, b.v2 - b.v1)
+      return (
+        <>
+          <Head title="Board" sub={`${formatLen(len, units)} long`} onClose={onClose} />
+          <div className="insp">
+            <div className="row"><div className="label">Length</div><div className="val">{formatLen(len, units)}</div></div>
+            <Slider label="Width" value={b.thickness} min={0.01} max={0.4} step={0.005} onChange={(v) => set({ thickness: v }, `bt:${b.uid}`)} display={formatLen(b.thickness, units)} />
+            <Slider label="Depth" value={b.depth} min={0.02} max={0.6} step={0.01} onChange={(v) => set({ depth: v }, `bd:${b.uid}`)} display={formatLen(b.depth, units)} />
+            <div className="row" style={{ alignItems: 'flex-start' }}>
+              <div className="label">Finish</div>
+              <div className="swatches" style={{ marginLeft: 'auto', maxWidth: '70%', justifyContent: 'flex-end' }}>
+                {PALETTE.map((p) => (
+                  <button key={p} className={`swatch ${b.color === p ? 'active' : ''}`} style={{ background: p }} onClick={() => set({ color: p, tex: undefined })} aria-label={`Colour ${p}`} />
+                ))}
+              </div>
+            </div>
+            <div className="btn-row">
+              <button className="btn" onClick={dup}><IconCopy size={18} /> Duplicate</button>
+              <button className="btn danger" onClick={del}><IconTrash size={18} /> Delete</button>
+            </div>
+          </div>
+        </>
+      )
+    }
     return (
       <>
         <Head title="Built-in" sub={`${formatLen(b.w, units)} × ${formatLen(b.h, units)} × ${formatLen(b.depth, units)} deep`} onClose={onClose} />
