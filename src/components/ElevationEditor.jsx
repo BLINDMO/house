@@ -126,8 +126,8 @@ export default function ElevationEditor() {
     const ns = clampV(Math.min((W - 2 * pad) / Math.max(0.5, geom.length), (H - 2 * pad) / Math.max(0.5, geom.height)), 14, 200)
     setXf({ scale: ns, panX: W / 2 - (geom.length / 2) * ns, panY: H / 2 + (geom.height / 2) * ns, init: true })
   }
-  const fitKey = geom ? `${current.label}:${geom.length.toFixed(2)}:${geom.height.toFixed(2)}` : 'none'
-  useLayoutEffect(() => { fitView() /* eslint-disable-next-line */ }, [fitKey, W, H])
+  const fitKey = geom ? `${current.label}` : 'none'
+  useLayoutEffect(() => { if (gestureRef.current) return; fitView() /* eslint-disable-next-line */ }, [fitKey, W, H])
 
   const mine = geom ? builtins.filter((b) => refEq(b.wall, current.ref)) : []
   const selB = selected?.type === 'builtin' ? builtins.find((b) => b.uid === selected.uid) : null
@@ -152,6 +152,14 @@ export default function ElevationEditor() {
             return { kind: 'b-handle', fixedU: (o[0] - panX) / scale, fixedV: (panY - o[1]) / scale }
           }
         }
+      }
+    }
+    // wall (room) resize handles — top edge = height, right edge = width
+    if (geom && !selMine) {
+      const defs = [['len', geom.length, geom.height / 2], ['ht', geom.length / 2, geom.height], ['both', geom.length, geom.height]]
+      for (const [which, hu, hv] of defs) {
+        const [hx, hy] = toScreen(hu, hv)
+        if (Math.hypot(px - hx, py - hy) < HANDLE_HIT) return { kind: 'wall-handle', which }
       }
     }
     for (let i = mine.length - 1; i >= 0; i--) {
@@ -179,25 +187,25 @@ export default function ElevationEditor() {
     }
     if (pointers.current.size > 2 || !geom) return
     const [u, v] = toWorld(px, py)
-    if (eTool === 'box') {
-      setGesture({ kind: 'drawBox', u0: snap(u, GRID), v0: snap(v, GRID), cur: { u: snap(u, GRID), v: snap(v, GRID), w: 0, h: 0 } })
-      return
-    }
-    if (eTool === 'line') {
-      const su = snap(u, GRID)
-      const sv = snap(v, GRID)
-      setGesture({ kind: 'drawLine', u1: su, v1: sv, cur: { u1: su, v1: sv, u2: su, v2: sv } })
-      return
-    }
+    // Existing objects & handles are grabbable in ANY tool — only empty space draws.
     const h = hitTest(px, py)
     if (h.kind === 'b-handle') setGesture({ kind: 'resizeB', uid: selMine.uid, fixedU: h.fixedU, fixedV: h.fixedV })
     else if (h.kind === 'b-end') setGesture({ kind: 'endB', uid: selMine.uid, end: h.end })
+    else if (h.kind === 'wall-handle') setGesture({ kind: 'resizeWall', which: h.which })
     else if (h.kind === 'builtin') {
       const b = mine.find((o) => o.uid === h.uid)
       dispatch({ type: 'select', sel: { type: 'builtin', uid: h.uid } })
       if (b.kind === 'board') setGesture({ kind: 'moveBoard', uid: h.uid, pu: u, pv: v, u1: b.u1, v1: b.v1, u2: b.u2, v2: b.v2 })
       else setGesture({ kind: 'moveB', uid: h.uid, ou: u - b.u, ov: v - b.v })
-    } else setGesture({ kind: 'pan', sx: px, sy: py, panX: xfRef.current.panX, panY: xfRef.current.panY, moved: false })
+    } else if (eTool === 'box') {
+      setGesture({ kind: 'drawBox', u0: snap(u, GRID), v0: snap(v, GRID), cur: { u: snap(u, GRID), v: snap(v, GRID), w: 0, h: 0 } })
+    } else if (eTool === 'line') {
+      const su = snap(u, GRID)
+      const sv = snap(v, GRID)
+      setGesture({ kind: 'drawLine', u1: su, v1: sv, cur: { u1: su, v1: sv, u2: su, v2: sv } })
+    } else {
+      setGesture({ kind: 'pan', sx: px, sy: py, panX: xfRef.current.panX, panY: xfRef.current.panY, moved: false })
+    }
   }
 
   const onMove = (e) => {
@@ -242,6 +250,20 @@ export default function ElevationEditor() {
       const u1 = snap(u, GRID)
       const v1 = snap(v, GRID)
       dispatch({ type: 'update', sel: { type: 'builtin', uid: g.uid }, patch: { u: Math.min(g.fixedU, u1), v: Math.min(g.fixedV, v1), w: Math.max(0.1, Math.abs(u1 - g.fixedU)), h: Math.max(0.1, Math.abs(v1 - g.fixedV)) }, mergeKey: `rb:${g.uid}` })
+    } else if (g.kind === 'resizeWall') {
+      let L = geom.length
+      let Hh = geom.height
+      if (g.which === 'len' || g.which === 'both') L = Math.max(0.5, snap(u, GRID))
+      if (g.which === 'ht' || g.which === 'both') Hh = clampV(snap(v, GRID), 1.5, 6)
+      const ref = current.ref
+      if (ref.kind === 'room') {
+        const patch = { height: Hh }
+        if (ref.side === 'n' || ref.side === 's') patch.w = L
+        else patch.d = L
+        dispatch({ type: 'update', sel: { type: 'room', uid: ref.uid }, patch, mergeKey: `ws:${ref.uid}` })
+      } else {
+        dispatch({ type: 'update', sel: { type: 'wall', uid: ref.uid }, patch: { height: Hh, x2: geom.ox + geom.dirx * L, z2: geom.oz + geom.dirz * L }, mergeKey: `ws:${ref.uid}` })
+      }
     }
   }
 
@@ -259,6 +281,7 @@ export default function ElevationEditor() {
         dispatch({ type: 'select', sel: null })
       }
     }
+    if (g && g.kind === 'resizeWall') fitView()
     if (pointers.current.size === 0) setGesture(null)
     try { svgRef.current.releasePointerCapture(e.pointerId) } catch { /* noop */ }
   }
@@ -408,6 +431,23 @@ export default function ElevationEditor() {
                 </g>
               )
             })()}
+
+            {/* wall (room) resize handles + size — shown when no built-in is selected */}
+            {!selMine && (() => {
+              const tc = toScreen(geom.length / 2, geom.height)
+              const rc = toScreen(geom.length, geom.height / 2)
+              const cor = toScreen(geom.length, geom.height)
+              const [lx, ly] = toScreen(0, geom.height)
+              return (
+                <g pointerEvents="none">
+                  <rect x={lx + 8} y={ly + 8} width={148} height={20} rx={10} fill={ACCENT} />
+                  <text x={lx + 82} y={ly + 22} textAnchor="middle" fontSize={11} fontWeight={700} fill="#20160a" fontFamily="-apple-system, system-ui, sans-serif">{formatLen(geom.length, units)} W × {formatLen(geom.height, units)} H</text>
+                  <circle cx={tc[0]} cy={tc[1]} r={7.5} fill={ACCENT} stroke="#20160a" strokeWidth={2} filter="url(#esh)" />
+                  <circle cx={rc[0]} cy={rc[1]} r={7.5} fill={ACCENT} stroke="#20160a" strokeWidth={2} filter="url(#esh)" />
+                  <circle cx={cor[0]} cy={cor[1]} r={8} fill={ACCENT} stroke="#20160a" strokeWidth={2} filter="url(#esh)" />
+                </g>
+              )
+            })()}
           </>
         )}
       </svg>
@@ -436,10 +476,10 @@ export default function ElevationEditor() {
       <button className="recenter" onClick={fitView} aria-label="Fit to view"><IconCenter size={20} /></button>
 
       <div className="hint">
-        {eTool === 'box' ? 'Drag to add a box or cubby'
-          : eTool === 'line' ? 'Drag to draw a wood board / slat'
-          : selMine ? 'Drag to move · drag handles to resize · edit for depth & finish'
-          : 'Tap a piece to select · ‹ › switches walls · Presets for kits'}
+        {selMine ? 'Drag to move · drag handles to resize · edit for depth & finish'
+          : eTool === 'box' ? 'Drag empty space to add a box · tap a piece to edit it'
+          : eTool === 'line' ? 'Drag empty space to draw a board · tap a piece to edit it'
+          : 'Tap a piece to edit · drag the gold dots to resize the room'}
       </div>
     </div>
   )
