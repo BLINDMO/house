@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
@@ -13,6 +14,7 @@ import { CATALOG_BY_TYPE } from '../data/catalog.js'
 import { haptic, effDims } from '../util.js'
 import { wallGeometry } from '../wall.js'
 import { buildItem, disposeGroup } from '../three/furniture.js'
+import { MATERIAL_BY_ID, matUrl, HDRI_URL } from '../data/materials.js'
 import { IconCenter } from './Icons.jsx'
 
 const AMBIANCE = {
@@ -82,22 +84,69 @@ export default function Scene3D() {
       }
       return r.imgCache.get(id)
     }
+    if (tex.startsWith('mat:')) {
+      const id = tex.slice(4)
+      if (!MATERIAL_BY_ID[id]) return null
+      const key = `mat:${id}`
+      if (!r.imgCache.has(key)) {
+        const t = new THREE.TextureLoader().load(matUrl(id))
+        t.colorSpace = THREE.SRGBColorSpace
+        t.wrapS = t.wrapT = THREE.RepeatWrapping
+        r.imgCache.set(key, t)
+      }
+      return r.imgCache.get(key)
+    }
     return null
   }
-  // build a material for a finish {tex, color} with a desired tile size (metres)
-  function finishMaterial(tex, color, fallback, repU, repV, extra = {}) {
+  // the matching normal-map texture for a finish, or null
+  function finishNormal(tex) {
+    const r = refs.current
+    if (typeof tex !== 'string' || !tex.startsWith('mat:')) return null
+    const id = tex.slice(4)
+    const m = MATERIAL_BY_ID[id]
+    if (!m || !m.normal) return null
+    const key = `nrm:${id}`
+    if (!r.imgCache.has(key)) {
+      const t = new THREE.TextureLoader().load(matUrl(id, true))
+      t.wrapS = t.wrapT = THREE.RepeatWrapping
+      r.imgCache.set(key, t)
+    }
+    return r.imgCache.get(key)
+  }
+  // real-world tile size (m) for a bundled material, else null (use caller's repeat)
+  function matRepeat(tex) {
+    if (typeof tex !== 'string' || !tex.startsWith('mat:')) return null
+    return MATERIAL_BY_ID[tex.slice(4)]?.repeat || null
+  }
+  // build a material for a finish {tex, color}. sizeU/sizeV are the surface
+  // dimensions in metres; defTile is the fallback tile size for non-material
+  // textures. Real Poly Haven materials tile at their declared real-world size.
+  function finishMaterial(tex, color, fallback, sizeU, sizeV, defTile = 1.5, extra = {}) {
     const base = finishBase(tex)
     if (base) {
-      let t = base
-      if (base.image instanceof HTMLCanvasElement) {
-        t = base.clone()
-        t.needsUpdate = true
-        t.wrapS = t.wrapT = THREE.RepeatWrapping
-        t.colorSpace = THREE.SRGBColorSpace
-        refs.current.roomTexList.push(t)
+      const tile = matRepeat(tex) || defTile
+      const repU = Math.max(1, sizeU / tile)
+      const repV = Math.max(1, sizeV / tile)
+      // Always clone: cached textures are shared, so per-surface repeat must be
+      // set on an independent copy (the underlying image is still shared).
+      const t = base.clone()
+      t.needsUpdate = true
+      t.wrapS = t.wrapT = THREE.RepeatWrapping
+      t.colorSpace = THREE.SRGBColorSpace
+      refs.current.roomTexList.push(t)
+      t.repeat.set(repU, repV)
+      const mat = new THREE.MeshStandardMaterial({ map: t, ...extra })
+      const nrm = finishNormal(tex)
+      if (nrm) {
+        const n = nrm.clone()
+        n.needsUpdate = true
+        n.wrapS = n.wrapT = THREE.RepeatWrapping
+        n.repeat.set(repU, repV)
+        refs.current.roomTexList.push(n)
+        mat.normalMap = n
+        mat.normalScale = new THREE.Vector2(0.6, 0.6)
       }
-      t.repeat.set(Math.max(1, repU), Math.max(1, repV))
-      return new THREE.MeshStandardMaterial({ map: t, ...extra })
+      return mat
     }
     return new THREE.MeshStandardMaterial({ color: new THREE.Color(color || fallback), ...extra })
   }
@@ -122,6 +171,16 @@ export default function Scene3D() {
     scene.background = new THREE.Color('#0e1014')
     const pmrem = new THREE.PMREMGenerator(renderer)
     try { scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture } catch { /* optional */ }
+    // Upgrade to a real Poly Haven CC0 interior HDRI for image-based lighting
+    // and reflections (async; the synthetic RoomEnvironment is the fallback).
+    new RGBELoader().load(HDRI_URL, (hdr) => {
+      try {
+        hdr.mapping = THREE.EquirectangularReflectionMapping
+        const env = pmrem.fromEquirectangular(hdr).texture
+        if (refs.current.scene) { refs.current.scene.environment = env; refs.current.envMap = env }
+      } catch { /* keep fallback */ }
+      hdr.dispose()
+    }, undefined, () => { /* offline / load failed: keep RoomEnvironment */ })
 
     const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 200)
     const controls = new OrbitControls(camera, renderer.domElement)
@@ -337,6 +396,7 @@ export default function Scene3D() {
       refs.current.woodCache.forEach((t) => t.dispose())
       refs.current.imgCache.forEach((t) => t.dispose())
       refs.current.roomTexList.forEach((t) => t.dispose())
+      refs.current.envMap?.dispose?.()
       composer?.dispose?.()
       pmrem.dispose(); renderer.dispose()
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement)
@@ -380,11 +440,11 @@ export default function Scene3D() {
       const cx = x + w / 2
       const cz = z + d / 2
       const ftex = room.floorTex || (room.floorColor ? undefined : 'wood:oak')
-      const floorMat = finishMaterial(ftex, room.floorColor, '#b08a5e', w / 1.5, d / 1.5, { roughness: 0.65, metalness: 0.02 })
+      const floorMat = finishMaterial(ftex, room.floorColor, '#b08a5e', w, d, 1.5, { roughness: 0.65, metalness: 0.02 })
       const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), floorMat)
       floor.rotation.x = -Math.PI / 2; floor.position.set(cx, 0, cz); floor.receiveShadow = true
       r.roomGroup.add(floor)
-      const wallMat = finishMaterial(room.wallTex, room.wallColor, '#e8e3da', w / 1.2, height / 1.2, { roughness: 0.95, side: THREE.DoubleSide })
+      const wallMat = finishMaterial(room.wallTex, room.wallColor, '#e8e3da', w, height, 1.2, { roughness: 0.95, side: THREE.DoubleSide })
       const on = (s) => !room.wallsOn || room.wallsOn[s] !== false
       const skirt = (geo, px, pz) => { const m = new THREE.Mesh(geo, skirtMat); m.position.set(px, 0.045, pz); r.roomGroup.add(m) }
       // Walls are centred on the room edges so neighbouring rooms share the
@@ -459,8 +519,9 @@ export default function Scene3D() {
       const geom = wallGeometry(b.wall, rooms, walls)
       if (!geom) continue
       const base = finishBase(b.tex)
+      const nMap = finishNormal(b.tex)
       const mat = base
-        ? new THREE.MeshStandardMaterial({ map: base, roughness: 0.6, metalness: 0.04 })
+        ? new THREE.MeshStandardMaterial({ map: base, normalMap: nMap || null, roughness: 0.6, metalness: 0.04 })
         : new THREE.MeshStandardMaterial({ color: new THREE.Color(b.color || '#c7ad84'), roughness: 0.62, metalness: 0.04 })
 
       // board / slat: a thin beam between two points in the wall plane

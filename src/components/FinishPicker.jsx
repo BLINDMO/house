@@ -1,5 +1,6 @@
 import React, { useRef } from 'react'
 import { PALETTE } from '../data/catalog.js'
+import { MATERIALS, matUrl } from '../data/materials.js'
 import { useAssets } from '../assets.jsx'
 
 export const WOODS = [
@@ -37,6 +38,15 @@ export default function FinishPicker({ value, onChange, allowTexture = true }) {
 
       {allowTexture && (
         <>
+          <div className="finish-label">Materials <span className="finish-by">Poly Haven · CC0</span></div>
+          <div className="finish-row">
+            {MATERIALS.map((m) => (
+              <button key={m.id} className={`swatch img ${tex === `mat:${m.id}` ? 'active' : ''}`}
+                style={{ backgroundImage: `url(${matUrl(m.id)})` }}
+                onClick={() => onChange({ color: m.color, tex: `mat:${m.id}` })} aria-label={m.label} title={m.label} />
+            ))}
+          </div>
+
           <div className="finish-label">Wood</div>
           <div className="finish-row">
             {WOODS.map((w) => (
