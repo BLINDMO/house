@@ -286,7 +286,6 @@ export default function ElevationEditor() {
     if (g && geom) {
       if (g.kind === 'drawBox' && g.cur.w > 0.1 && g.cur.h > 0.1) {
         dispatch({ type: 'addBuiltin', builtin: { wall: current.ref, u: g.cur.u, v: g.cur.v, w: g.cur.w, h: g.cur.h, depth: 0.5, kind: 'cubby', color: WOOD.color, tex: WOOD.tex } })
-        dispatch({ type: 'sideTool', tool: 'select' })
       } else if (g.kind === 'drawLine' && Math.hypot(g.cur.u2 - g.cur.u1, g.cur.v2 - g.cur.v1) > 0.05) {
         dispatch({ type: 'addBuiltin', builtin: { wall: current.ref, kind: 'board', u1: g.cur.u1, v1: g.cur.v1, u2: g.cur.u2, v2: g.cur.v2, thickness: 0.05, depth: 0.04, color: WOOD.color, tex: WOOD.tex } })
       } else if (g.kind === 'pan' && !g.moved) {

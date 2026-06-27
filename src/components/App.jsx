@@ -6,8 +6,7 @@ import ElevationEditor from './ElevationEditor.jsx'
 import Scene3D from './Scene3D.jsx'
 import Rail from './Rail.jsx'
 import Panel from './Panel.jsx'
-import RotateGate from './RotateGate.jsx'
-import { IconPlan, IconCube, IconSide, IconUndo, IconRedo, IconShare } from './Icons.jsx'
+import { IconPlan, IconCube, IconSide, IconUndo, IconRedo, IconShare, IconNew } from './Icons.jsx'
 
 export default function App() {
   const { state, dispatch, canUndo, canRedo } = useStore()
@@ -28,6 +27,12 @@ export default function App() {
   const setView = (v) => dispatch({ type: 'view', view: v })
   const openPanel = (kind) => setOverride((p) => (p === kind ? null : kind))
   const closePanel = () => { setOverride(null); dispatch({ type: 'select', sel: null }) }
+
+  const newDesign = () => {
+    dispatch({ type: 'reset' })
+    setOverride(null)
+    flash('New design — undo to restore')
+  }
 
   const addKind = (kind) => {
     let x = 0
@@ -81,6 +86,7 @@ export default function App() {
         </div>
 
         <div className="tools">
+          <button className="tool" onClick={newDesign} aria-label="New design"><IconNew size={18} /></button>
           <button className="tool" disabled={!canUndo} onClick={() => dispatch({ type: 'undo' })} aria-label="Undo"><IconUndo size={18} /></button>
           <button className="tool" disabled={!canRedo} onClick={() => dispatch({ type: 'redo' })} aria-label="Redo"><IconRedo size={18} /></button>
           <button className="tool" onClick={exportView} aria-label="Export image"><IconShare size={18} /></button>
@@ -94,14 +100,13 @@ export default function App() {
           {view === '2d' ? <Editor2D /> : view === 'side' ? <ElevationEditor /> : <Scene3D />}
         </main>
 
+        {panel && <div className="panel-scrim" onClick={closePanel} />}
         {panel && (
           <Panel kind={panel} onClose={closePanel} onFlash={flash} onPick={addKind} />
         )}
       </div>
 
       {toast && <div className="toast" key={toast.t}>{toast.msg}</div>}
-
-      <RotateGate />
     </div>
   )
 }

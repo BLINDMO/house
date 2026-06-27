@@ -357,12 +357,15 @@ export default function Editor2D() {
     if (pointers.current.size < 2) pinch.current = null
     const g = gestureRef.current
     if (g) {
-      if (g.kind === 'drawRoom' && g.cur.w > 0.3 && g.cur.d > 0.3) {
-        dispatch({ type: 'addRoom', x: g.cur.x, z: g.cur.z, w: g.cur.w, d: g.cur.d, height: defaultHeight })
-        dispatch({ type: 'tool', tool: 'select' })
+      if (g.kind === 'drawRoom') {
+        if (g.cur.w > 0.3 && g.cur.d > 0.3) {
+          dispatch({ type: 'addRoom', x: g.cur.x, z: g.cur.z, w: g.cur.w, d: g.cur.d, height: defaultHeight })
+        } else {
+          // a tap (no real drag) drops a default room so it's one-tap to start
+          dispatch({ type: 'addRoom', x: snapX(g.x0 - 1.8), z: snapZ(g.z0 - 1.5), w: 3.6, d: 3, height: defaultHeight })
+        }
       } else if (g.kind === 'drawWall' && Math.hypot(g.cur.x2 - g.cur.x1, g.cur.z2 - g.cur.z1) > 0.2) {
         dispatch({ type: 'addWall', ...g.cur, height: defaultHeight })
-        dispatch({ type: 'tool', tool: 'select' })
       } else if (g.kind === 'pan' && !g.moved) {
         dispatch({ type: 'select', sel: null })
       }
@@ -576,7 +579,10 @@ export default function Editor2D() {
       {empty && (
         <div className="empty">
           <b>Start your floor plan</b>
-          <span>Tap <strong>Room</strong> below and drag on the canvas to draw a room. Add walls with the <strong>Wall</strong> tool.</span>
+          <span>Pick <strong>Room</strong> in the toolbar and drag — or just tap the canvas to drop one.</span>
+          <button className="empty-cta" onClick={() => dispatch({ type: 'addRoom', x: snapX(-1.8), z: snapZ(-1.5), w: 3.6, d: 3, height: defaultHeight })}>
+            + Add a room
+          </button>
         </div>
       )}
 

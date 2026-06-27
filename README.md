@@ -2,7 +2,9 @@
 
 A premium, installable **PWA** for drawing rooms and walls and designing them in **2D and 3D**.
 
-**Landscape-only**, with a desktop-style studio layout: a left tool rail, a centered canvas, and a right properties panel that opens on selection (portrait shows a rotate prompt). The 3D view uses post-processing (ambient occlusion + anti-aliasing) for richer renders.
+A desktop-style studio layout: a left tool rail, a centered canvas, and a contextual properties panel that opens on selection. **Optimised for landscape** (the panel docks to the right) and fully usable in portrait (the panel becomes a bottom sheet) — it just starts in whatever orientation, no rotation required. The 3D view uses post-processing (ambient occlusion + anti-aliasing) for richer renders.
+
+Start fast: pick **Room** and drag — or tap to drop a default room — and keep placing more without re-selecting the tool. **New** clears to a fresh canvas (undoable).
 
 ![Honeycutt Room Studio](public/icon-192.png)
 
