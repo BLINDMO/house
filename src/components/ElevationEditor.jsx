@@ -122,9 +122,12 @@ export default function ElevationEditor() {
 
   function fitView() {
     if (!geom || !W) { setXf((s) => ({ ...s, init: true })); return }
-    const pad = 70
-    const ns = clampV(Math.min((W - 2 * pad) / Math.max(0.5, geom.length), (H - 2 * pad) / Math.max(0.5, geom.height)), 14, 200)
-    setXf({ scale: ns, panX: W / 2 - (geom.length / 2) * ns, panY: H / 2 + (geom.height / 2) * ns, init: true })
+    const padX = 56
+    const padTop = 116 // clear the wall picker + tool rows
+    const padBottom = 60 // clear floor hatch + hint
+    const ns = clampV(Math.min((W - 2 * padX) / Math.max(0.5, geom.length), (H - padTop - padBottom) / Math.max(0.5, geom.height)), 14, 200)
+    const cy = (padTop + (H - padBottom)) / 2
+    setXf({ scale: ns, panX: W / 2 - (geom.length / 2) * ns, panY: cy + (geom.height / 2) * ns, init: true })
   }
   const fitKey = geom ? `${current.label}` : 'none'
   useLayoutEffect(() => { if (gestureRef.current) return; fitView() /* eslint-disable-next-line */ }, [fitKey, W, H])

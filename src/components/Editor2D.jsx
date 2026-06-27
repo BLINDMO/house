@@ -75,13 +75,16 @@ export default function Editor2D() {
     for (const w of walls) { acc(w.x1, w.z1); acc(w.x2, w.z2) }
     for (const it of items) { const c = CATALOG_BY_TYPE[it.type]; const d = effDims(c, it); acc(it.x - d.w / 2, it.z - d.d / 2); acc(it.x + d.w / 2, it.z + d.d / 2) }
     if (!isFinite(minX)) { setXf({ scale: 64, panX: W / 2, panY: H / 2, init: true }); return }
-    const pad = 70
+    const padX = 56
+    const padTop = 92 // clear the tool switcher
+    const padBottom = 64 // clear the hint
     const spanX = Math.max(0.5, maxX - minX)
     const spanZ = Math.max(0.5, maxZ - minZ)
-    const ns = clampV(Math.min((W - 2 * pad) / spanX, (H - 2 * pad) / spanZ), 14, 180)
+    const ns = clampV(Math.min((W - 2 * padX) / spanX, (H - padTop - padBottom) / spanZ), 14, 180)
     const cx = (minX + maxX) / 2
     const cz = (minZ + maxZ) / 2
-    setXf({ scale: ns, panX: W / 2 - cx * ns, panY: H / 2 - cz * ns, init: true })
+    const cy = (padTop + (H - padBottom)) / 2
+    setXf({ scale: ns, panX: W / 2 - cx * ns, panY: cy - cz * ns, init: true })
   }
 
   // Auto-fit on first load with content, and the first time a plan is started.

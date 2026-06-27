@@ -139,10 +139,10 @@ export default function App() {
 
       <nav className="dock">
         <button className="pill accent" onClick={() => { dispatch({ type: 'select', sel: null }); setSheet('catalog') }}>
-          <IconPlus size={19} /> Add Furniture
+          <IconPlus size={19} /> <span className="pill-label">Add Furniture</span>
         </button>
         <button className="pill" onClick={() => setSheet('settings')}>
-          <IconTune size={19} /> Settings
+          <IconTune size={19} /> <span className="pill-label">Settings</span>
         </button>
       </nav>
 
