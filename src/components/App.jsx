@@ -109,15 +109,28 @@ export default function App() {
           <button className="tool" disabled={!canRedo} onClick={() => dispatch({ type: 'redo' })} aria-label="Redo"><IconRedo size={18} /></button>
         </div>
 
-        {selected && tool === 'select' && (
-          <ActionBar
-            type={selected.type}
-            onRotate={() => { if (selected.type === 'item') { const it = items.find((i) => i.uid === selected.uid); dispatch({ type: 'update', sel: selected, patch: { rot: ((it?.rot || 0) + 90) % 360 } }); haptic(6) } }}
-            onDup={() => { dispatch({ type: 'duplicate', sel: selected }); haptic(8); flash('Duplicated') }}
-            onEdit={() => setSheet('inspector')}
-            onDelete={() => { dispatch({ type: 'remove', sel: selected }); haptic(12); flash('Removed') }}
-          />
-        )}
+        {selected && tool === 'select' && (() => {
+          const rw = selected.type === 'roomwall' ? rooms.find((r) => r.uid === selected.uid) : null
+          const rwOn = rw ? !rw.wallsOn || rw.wallsOn[selected.side] !== false : true
+          const toggleWall = () => {
+            if (!rw) return
+            const next = { ...(rw.wallsOn || {}), [selected.side]: !rwOn }
+            dispatch({ type: 'update', sel: { type: 'room', uid: rw.uid }, patch: { wallsOn: next } })
+            haptic(10)
+            flash(rwOn ? 'Wall removed' : 'Wall added')
+          }
+          return (
+            <ActionBar
+              type={selected.type}
+              wallOn={rwOn}
+              onToggle={toggleWall}
+              onRotate={() => { if (selected.type === 'item') { const it = items.find((i) => i.uid === selected.uid); dispatch({ type: 'update', sel: selected, patch: { rot: ((it?.rot || 0) + 90) % 360 } }); haptic(6) } }}
+              onDup={() => { dispatch({ type: 'duplicate', sel: selected }); haptic(8); flash('Duplicated') }}
+              onEdit={() => setSheet('inspector')}
+              onDelete={() => { dispatch({ type: 'remove', sel: selected }); haptic(12); flash('Removed') }}
+            />
+          )
+        })()}
       </main>
 
       <nav className="dock">
@@ -144,7 +157,16 @@ export default function App() {
   )
 }
 
-function ActionBar({ type, onRotate, onDup, onEdit, onDelete }) {
+function ActionBar({ type, wallOn, onToggle, onRotate, onDup, onEdit, onDelete }) {
+  if (type === 'roomwall') {
+    return (
+      <div className="fab-col">
+        {wallOn
+          ? <button className="fab" onClick={onToggle} aria-label="Delete wall" style={{ color: 'var(--danger)' }}><IconTrash size={20} /></button>
+          : <button className="fab primary" onClick={onToggle} aria-label="Add wall"><IconPlus size={20} /></button>}
+      </div>
+    )
+  }
   return (
     <div className="fab-col">
       {type === 'item' && <button className="fab" onClick={onRotate} aria-label="Rotate"><IconRotate size={20} /></button>}

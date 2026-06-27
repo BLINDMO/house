@@ -11,14 +11,11 @@ export function snapPosition(x, z, halfX, halfZ, room, grid = 0.05, wall = 0.12)
 
 // ---- units / formatting ----
 export function feetInches(m) {
-  const totalIn = m * 39.3701
-  let ft = Math.floor(totalIn / 12)
-  let inch = Math.round(totalIn - ft * 12)
-  if (inch === 12) {
-    ft += 1
-    inch = 0
-  }
-  return `${ft}′${inch}″`
+  const total = Math.round(m * 39.3701) // whole inches
+  if (total < 12) return `${total}″`
+  const ft = Math.floor(total / 12)
+  const inch = total - ft * 12
+  return inch ? `${ft}′ (${inch}″)` : `${ft}′`
 }
 
 export function formatLen(m, units) {

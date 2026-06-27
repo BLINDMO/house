@@ -183,11 +183,26 @@ button {
   position: absolute;
   inset: 0;
   touch-action: none;
+  background: #ffffff;
 }
 .editor2d svg {
   width: 100%;
   height: 100%;
   display: block;
+}
+.editor2d .empty b {
+  color: #2b303a;
+}
+.editor2d .empty span {
+  color: #6a7280;
+}
+.editor2d .empty strong {
+  color: #b8924f;
+}
+.editor2d .hint {
+  background: rgba(255, 255, 255, 0.82);
+  color: #5b6470;
+  border-color: rgba(0, 0, 0, 0.1);
 }
 
 .hint {

@@ -82,6 +82,18 @@ export default function Inspector({ onClose, onFlash }) {
           <Slider label="Depth" value={room.d} min={0.5} max={40} step={0.1} onChange={(v) => set({ d: v }, `rd:${room.uid}`)} display={formatLen(room.d, units)} />
           <Slider label="Wall height" value={room.height} min={1.5} max={6} step={0.1} onChange={(v) => set({ height: v }, `rh:${room.uid}`)} display={formatLen(room.height, units)} />
           <div className="row"><div className="label">Floor area</div><div className="val">{units === 'm' ? `${area.toFixed(1)} m²` : `${Math.round(area * 10.7639)} ft²`}</div></div>
+          <div className="row">
+            <div className="label">Walls</div>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+              {[['n', 'N'], ['e', 'E'], ['s', 'S'], ['w', 'W']].map(([side, lbl]) => {
+                const on = !room.wallsOn || room.wallsOn[side] !== false
+                return (
+                  <button key={side} className="chip" style={on ? activeChip : undefined}
+                    onClick={() => set({ wallsOn: { ...(room.wallsOn || {}), [side]: !on } })}>{lbl}</button>
+                )
+              })}
+            </div>
+          </div>
           <div className="btn-row">
             <button className="btn" onClick={dup}><IconCopy size={18} /> Duplicate</button>
             <button className="btn danger" onClick={del}><IconTrash size={18} /> Delete</button>

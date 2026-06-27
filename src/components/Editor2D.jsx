@@ -3,25 +3,36 @@ import { useStore, footHalf } from '../store.jsx'
 import { CATALOG_BY_TYPE } from '../data/catalog.js'
 import { effDims, formatLen } from '../util.js'
 import Footprint from './Footprint.jsx'
+import { IconCenter } from './Icons.jsx'
 
 const ACCENT = '#d9b779'
-const WALLCOL = '#cdc6b8'
+const WALL_ON = '#39414f'
+const WALL_OFF = '#c3c9d1'
+const FLOOR = '#eef1f5'
 const GRID = 0.1
 const ITEM_GRID = 0.05
 const HANDLE_HIT = 18
+const SIDES = ['n', 'e', 's', 'w']
 
 const snap = (v, g) => Math.round(v / g) * g
 const clampV = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+const wallOn = (room, side) => !room.wallsOn || room.wallsOn[side] !== false
 
+function roomSide(r, side) {
+  switch (side) {
+    case 'n': return [r.x, r.z, r.x + r.w, r.z]
+    case 's': return [r.x, r.z + r.d, r.x + r.w, r.z + r.d]
+    case 'w': return [r.x, r.z, r.x, r.z + r.d]
+    default: return [r.x + r.w, r.z, r.x + r.w, r.z + r.d]
+  }
+}
 function distToSeg(px, pz, x1, z1, x2, z2) {
   const dx = x2 - x1
   const dz = z2 - z1
   const len2 = dx * dx + dz * dz || 1e-6
   let t = ((px - x1) * dx + (pz - z1) * dz) / len2
   t = clampV(t, 0, 1)
-  const cx = x1 + t * dx
-  const cz = z1 + t * dz
-  return Math.hypot(px - cx, pz - cz)
+  return Math.hypot(px - (x1 + t * dx), pz - (z1 + t * dz))
 }
 
 export default function Editor2D() {
@@ -30,7 +41,7 @@ export default function Editor2D() {
   const wrapRef = useRef(null)
   const svgRef = useRef(null)
   const [size, setSize] = useState({ W: 360, H: 540 })
-  const [xf, setXf] = useState({ scale: 46, panX: 180, panY: 270, init: false })
+  const [xf, setXf] = useState({ scale: 64, panX: 180, panY: 270, init: false })
   const [gesture, setGesture] = useState(null)
   const gestureRef = useRef(null)
   gestureRef.current = gesture
@@ -38,6 +49,7 @@ export default function Editor2D() {
   const pinch = useRef(null)
   const xfRef = useRef(xf)
   xfRef.current = xf
+  const fitted = useRef(false)
 
   useLayoutEffect(() => {
     const el = wrapRef.current
@@ -46,7 +58,7 @@ export default function Editor2D() {
       const W = el.clientWidth
       const H = el.clientHeight
       setSize({ W, H })
-      setXf((s) => (s.init ? s : { scale: 46, panX: W / 2, panY: H / 2, init: true }))
+      setXf((s) => (s.init ? s : { scale: 64, panX: W / 2, panY: H / 2, init: true }))
     }
     const ro = new ResizeObserver(apply)
     ro.observe(el)
@@ -55,6 +67,32 @@ export default function Editor2D() {
   }, [])
 
   const { W, H } = size
+
+  function fitView() {
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
+    const acc = (x, z) => { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z) }
+    for (const r of rooms) { acc(r.x, r.z); acc(r.x + r.w, r.z + r.d) }
+    for (const w of walls) { acc(w.x1, w.z1); acc(w.x2, w.z2) }
+    for (const it of items) { const c = CATALOG_BY_TYPE[it.type]; const d = effDims(c, it); acc(it.x - d.w / 2, it.z - d.d / 2); acc(it.x + d.w / 2, it.z + d.d / 2) }
+    if (!isFinite(minX)) { setXf({ scale: 64, panX: W / 2, panY: H / 2, init: true }); return }
+    const pad = 70
+    const spanX = Math.max(0.5, maxX - minX)
+    const spanZ = Math.max(0.5, maxZ - minZ)
+    const ns = clampV(Math.min((W - 2 * pad) / spanX, (H - 2 * pad) / spanZ), 14, 180)
+    const cx = (minX + maxX) / 2
+    const cz = (minZ + maxZ) / 2
+    setXf({ scale: ns, panX: W / 2 - cx * ns, panY: H / 2 - cz * ns, init: true })
+  }
+
+  // Auto-fit on first load with content, and the first time a plan is started.
+  const hasContent = rooms.length > 0 || walls.length > 0 || items.length > 0
+  useLayoutEffect(() => {
+    if (size.W && hasContent && !fitted.current) {
+      fitView()
+      fitted.current = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [size.W, hasContent])
   const { scale, panX, panY } = xf
   const toScreen = (x, z) => [x * scale + panX, z * scale + panY]
   const toWorld = (px, py) => [(px - panX) / scale, (py - panY) / scale]
@@ -67,7 +105,6 @@ export default function Editor2D() {
   const selRoom = selected?.type === 'room' ? rooms.find((r) => r.uid === selected.uid) : null
   const selWall = selected?.type === 'wall' ? walls.find((w) => w.uid === selected.uid) : null
 
-  // ---------- hit testing ----------
   function itemCorners(it) {
     const c = CATALOG_BY_TYPE[it.type]
     const d = effDims(c, it)
@@ -83,30 +120,22 @@ export default function Editor2D() {
       return [cxp + lx * cos - ly * sin, cyp + lx * sin + ly * cos]
     })
   }
-  function roomHandles(r) {
-    const [x0, y0] = toScreen(r.x, r.z)
-    const w = r.w * scale
-    const h = r.d * scale
-    const cx = x0 + w / 2
-    const cy = y0 + h / 2
+  function roomCorners(r) {
     return {
-      nw: [x0, y0], n: [cx, y0], ne: [x0 + w, y0], e: [x0 + w, cy],
-      se: [x0 + w, y0 + h], s: [cx, y0 + h], sw: [x0, y0 + h], w: [x0, cy],
+      nw: toScreen(r.x, r.z), ne: toScreen(r.x + r.w, r.z),
+      se: toScreen(r.x + r.w, r.z + r.d), sw: toScreen(r.x, r.z + r.d),
     }
   }
+
   function hitTest(px, py) {
     const [wx, wz] = toWorld(px, py)
     if (selItem) {
       const cs = itemCorners(selItem)
-      for (let i = 0; i < 4; i++) {
-        if (Math.hypot(px - cs[i][0], py - cs[i][1]) < HANDLE_HIT) return { kind: 'item-handle' }
-      }
+      for (let i = 0; i < 4; i++) if (Math.hypot(px - cs[i][0], py - cs[i][1]) < HANDLE_HIT) return { kind: 'item-handle' }
     }
     if (selRoom) {
-      const hs = roomHandles(selRoom)
-      for (const k in hs) {
-        if (Math.hypot(px - hs[k][0], py - hs[k][1]) < HANDLE_HIT) return { kind: 'room-handle', handle: k }
-      }
+      const cs = roomCorners(selRoom)
+      for (const k in cs) if (Math.hypot(px - cs[k][0], py - cs[k][1]) < HANDLE_HIT) return { kind: 'room-handle', handle: k }
     }
     if (selWall) {
       for (const end of ['1', '2']) {
@@ -114,7 +143,6 @@ export default function Editor2D() {
         if (Math.hypot(px - hx, py - hy) < HANDLE_HIT) return { kind: 'wall-end', end }
       }
     }
-    // items (topmost first)
     for (let i = items.length - 1; i >= 0; i--) {
       const it = items[i]
       const c = CATALOG_BY_TYPE[it.type]
@@ -127,12 +155,18 @@ export default function Editor2D() {
       const lz = -vx * Math.sin(th) + vz * Math.cos(th)
       if (Math.abs(lx) <= d.w / 2 + 0.08 && Math.abs(lz) <= d.d / 2 + 0.08) return { kind: 'item', uid: it.uid }
     }
-    // walls
     for (let i = walls.length - 1; i >= 0; i--) {
       const w = walls[i]
       if (distToSeg(wx, wz, w.x1, w.z1, w.x2, w.z2) <= w.thickness / 2 + 0.18) return { kind: 'wall', uid: w.uid }
     }
-    // rooms
+    // room wall sides (a click on an edge selects that wall, not the room)
+    for (let i = rooms.length - 1; i >= 0; i--) {
+      const r = rooms[i]
+      for (const side of SIDES) {
+        const [x1, z1, x2, z2] = roomSide(r, side)
+        if (distToSeg(wx, wz, x1, z1, x2, z2) <= 0.18) return { kind: 'roomwall', uid: r.uid, side }
+      }
+    }
     for (let i = rooms.length - 1; i >= 0; i--) {
       const r = rooms[i]
       if (wx >= r.x && wx <= r.x + r.w && wz >= r.z && wz <= r.z + r.d) return { kind: 'room', uid: r.uid }
@@ -140,7 +174,6 @@ export default function Editor2D() {
     return { kind: 'empty' }
   }
 
-  // ---------- pointer handling ----------
   const onDown = (e) => {
     const [px, py] = ptr(e)
     pointers.current.set(e.pointerId, { x: px, y: py })
@@ -193,16 +226,18 @@ export default function Editor2D() {
         setGesture({ kind: 'moveWall', uid: h.uid, ox: wx, oz: wz, x1: w.x1, z1: w.z1, x2: w.x2, z2: w.z2 })
         break
       }
+      case 'roomwall':
+        dispatch({ type: 'select', sel: { type: 'roomwall', uid: h.uid, side: h.side } })
+        setGesture(null)
+        break
       case 'room': {
         const r = rooms.find((o) => o.uid === h.uid)
         dispatch({ type: 'select', sel: { type: 'room', uid: h.uid } })
         setGesture({ kind: 'moveRoom', uid: h.uid, ox: wx - r.x, oz: wz - r.z })
         break
       }
-      default: {
-        const v = xfRef.current
-        setGesture({ kind: 'pan', sx: px, sy: py, panX: v.panX, panY: v.panY, moved: false })
-      }
+      default:
+        setGesture({ kind: 'pan', sx: px, sy: py, panX: xfRef.current.panX, panY: xfRef.current.panY, moved: false })
     }
   }
 
@@ -298,7 +333,7 @@ export default function Editor2D() {
     setXf({ scale: ns, panX: px - wx * ns, panY: py - wy * ns, init: true })
   }
 
-  // ---------- grid ----------
+  // grid
   const gridLines = []
   {
     const [wl] = toWorld(0, 0)
@@ -311,12 +346,12 @@ export default function Editor2D() {
       for (let x = Math.ceil(wl / step) * step; x <= wr; x += step) {
         const [sx] = toScreen(x, 0)
         const axis = Math.abs(x) < 1e-6
-        gridLines.push(<line key={`v${x}`} x1={sx} y1={0} x2={sx} y2={H} stroke={axis ? ACCENT : '#fff'} strokeOpacity={axis ? 0.25 : 0.05} strokeWidth={1} />)
+        gridLines.push(<line key={`v${x}`} x1={sx} y1={0} x2={sx} y2={H} stroke="#000" strokeOpacity={axis ? 0.16 : 0.055} strokeWidth={1} />)
       }
       for (let z = Math.ceil(wt / step) * step; z <= wb; z += step) {
         const [, sy] = toScreen(0, z)
         const axis = Math.abs(z) < 1e-6
-        gridLines.push(<line key={`h${z}`} x1={0} y1={sy} x2={W} y2={sy} stroke={axis ? ACCENT : '#fff'} strokeOpacity={axis ? 0.25 : 0.05} strokeWidth={1} />)
+        gridLines.push(<line key={`h${z}`} x1={0} y1={sy} x2={W} y2={sy} stroke="#000" strokeOpacity={axis ? 0.16 : 0.055} strokeWidth={1} />)
       }
     }
   }
@@ -329,43 +364,77 @@ export default function Editor2D() {
         style={{ touchAction: 'none', cursor: tool === 'select' ? 'default' : 'crosshair' }}>
         <defs>
           <filter id="softshadow" x="-30%" y="-30%" width="160%" height="160%">
-            <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000" floodOpacity="0.35" />
+            <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000" floodOpacity="0.22" />
           </filter>
         </defs>
 
         <rect x={0} y={0} width={W} height={H} fill="transparent" />
         <g pointerEvents="none">{gridLines}</g>
 
-        {/* rooms */}
+        {/* room floors */}
         {rooms.map((r) => {
           const [x0, y0] = toScreen(r.x, r.z)
-          const w = r.w * scale
-          const h = r.d * scale
-          const sel = selRoom?.uid === r.uid
-          return (
-            <g key={r.uid} pointerEvents="none">
-              <rect x={x0} y={y0} width={w} height={h} fill="#20242c" stroke="rgba(255,255,255,0.04)" />
-              <rect x={x0} y={y0} width={w} height={h} fill="none" stroke={sel ? '#ffffff' : ACCENT} strokeOpacity={sel ? 0.95 : 0.8} strokeWidth={sel ? 4 : 3} />
-              {sel && (
-                <g fontSize={12} fontWeight={700} fill="#20160a" fontFamily="-apple-system, system-ui, sans-serif">
-                  <rect x={x0 + w / 2 - 58} y={y0 - 25} width={116} height={19} rx={9.5} fill={ACCENT} />
-                  <text x={x0 + w / 2} y={y0 - 11} textAnchor="middle">{formatLen(r.w, units)} × {formatLen(r.d, units)}</text>
-                </g>
-              )}
-            </g>
-          )
+          return <rect key={r.uid} x={x0} y={y0} width={r.w * scale} height={r.d * scale} fill={FLOOR} pointerEvents="none" />
         })}
 
-        {/* walls */}
+        {/* room wall sides */}
+        {rooms.map((r) => (
+          <g key={r.uid} pointerEvents="none">
+            {SIDES.map((side) => {
+              const [x1, z1, x2, z2] = roomSide(r, side)
+              const [ax, ay] = toScreen(x1, z1)
+              const [bx, by] = toScreen(x2, z2)
+              const on = wallOn(r, side)
+              const isSel = selected?.type === 'roomwall' && selected.uid === r.uid && selected.side === side
+              return (
+                <line key={side} x1={ax} y1={ay} x2={bx} y2={by}
+                  stroke={isSel ? ACCENT : on ? WALL_ON : WALL_OFF}
+                  strokeWidth={isSel ? 6 : on ? 4 : 2}
+                  strokeLinecap="round"
+                  strokeDasharray={on ? undefined : '7 7'} />
+              )
+            })}
+          </g>
+        ))}
+
+        {/* selected room outline + dimension badge */}
+        {selRoom && (() => {
+          const [x0, y0] = toScreen(selRoom.x, selRoom.z)
+          const w = selRoom.w * scale
+          return (
+            <g pointerEvents="none">
+              <rect x={x0} y={y0} width={w} height={selRoom.d * scale} fill="none" stroke={ACCENT} strokeOpacity={0.7} strokeWidth={2} strokeDasharray="6 5" />
+              <g fontSize={11.5} fontWeight={700} fill="#20160a" fontFamily="-apple-system, system-ui, sans-serif">
+                <rect x={x0 + w / 2 - 78} y={y0 - 25} width={156} height={19} rx={9.5} fill={ACCENT} />
+                <text x={x0 + w / 2} y={y0 - 11} textAnchor="middle">{formatLen(selRoom.w, units)} × {formatLen(selRoom.d, units)}</text>
+              </g>
+              {Object.entries(roomCorners(selRoom)).map(([k, [hx, hy]]) => (
+                <circle key={k} cx={hx} cy={hy} r={7} fill={ACCENT} stroke="#20160a" strokeWidth={2} filter="url(#softshadow)" />
+              ))}
+            </g>
+          )
+        })()}
+
+        {/* free walls */}
         {walls.map((wl) => {
           const [ax, ay] = toScreen(wl.x1, wl.z1)
           const [bx, by] = toScreen(wl.x2, wl.z2)
           const sel = selWall?.uid === wl.uid
           return (
-            <line key={wl.uid} x1={ax} y1={ay} x2={bx} y2={by} stroke={sel ? '#ffffff' : WALLCOL}
+            <line key={wl.uid} x1={ax} y1={ay} x2={bx} y2={by} stroke={sel ? ACCENT : WALL_ON}
               strokeWidth={Math.max(5, wl.thickness * scale)} strokeLinecap="round" pointerEvents="none" filter="url(#softshadow)" />
           )
         })}
+        {selWall && (() => {
+          const [ax, ay] = toScreen(selWall.x1, selWall.z1)
+          const [bx, by] = toScreen(selWall.x2, selWall.z2)
+          return (
+            <g pointerEvents="none">
+              <circle cx={ax} cy={ay} r={7} fill="#fff" stroke={ACCENT} strokeWidth={2.5} filter="url(#softshadow)" />
+              <circle cx={bx} cy={by} r={7} fill="#fff" stroke={ACCENT} strokeWidth={2.5} filter="url(#softshadow)" />
+            </g>
+          )
+        })()}
 
         {/* items */}
         {items.map((it) => {
@@ -389,13 +458,13 @@ export default function Editor2D() {
           )
         })}
 
-        {/* live previews */}
+        {/* draw previews */}
         {gesture?.kind === 'drawRoom' && (() => {
           const [x0, y0] = toScreen(gesture.cur.x, gesture.cur.z)
           return (
             <g pointerEvents="none">
-              <rect x={x0} y={y0} width={gesture.cur.w * scale} height={gesture.cur.d * scale} fill={ACCENT} fillOpacity={0.1} stroke={ACCENT} strokeWidth={3} strokeDasharray="6 5" />
-              <text x={x0 + (gesture.cur.w * scale) / 2} y={y0 - 8} textAnchor="middle" fontSize={12} fontWeight={700} fill={ACCENT}>
+              <rect x={x0} y={y0} width={gesture.cur.w * scale} height={gesture.cur.d * scale} fill={ACCENT} fillOpacity={0.12} stroke={ACCENT} strokeWidth={3} strokeDasharray="6 5" />
+              <text x={x0 + (gesture.cur.w * scale) / 2} y={y0 - 8} textAnchor="middle" fontSize={12} fontWeight={700} fill="#9a7327">
                 {formatLen(gesture.cur.w, units)} × {formatLen(gesture.cur.d, units)}
               </text>
             </g>
@@ -408,7 +477,7 @@ export default function Editor2D() {
           return (
             <g pointerEvents="none">
               <line x1={ax} y1={ay} x2={bx} y2={by} stroke={ACCENT} strokeWidth={6} strokeLinecap="round" strokeDasharray="8 6" />
-              <text x={(ax + bx) / 2} y={(ay + by) / 2 - 8} textAnchor="middle" fontSize={12} fontWeight={700} fill={ACCENT}>{formatLen(len, units)}</text>
+              <text x={(ax + bx) / 2} y={(ay + by) / 2 - 8} textAnchor="middle" fontSize={12} fontWeight={700} fill="#9a7327">{formatLen(len, units)}</text>
             </g>
           )
         })()}
@@ -425,40 +494,37 @@ export default function Editor2D() {
               {cs.map(([hx, hy], i) => (
                 <circle key={i} cx={hx} cy={hy} r={7} fill="#fff" stroke={ACCENT} strokeWidth={2.5} filter="url(#softshadow)" />
               ))}
-              <g>
-                <rect x={ix - 58} y={iy - radius - 30} width={116} height={22} rx={11} fill={ACCENT} />
-                <text x={ix} y={iy - radius - 15} textAnchor="middle" fontSize={12.5} fontWeight={700} fill="#20160a" fontFamily="-apple-system, system-ui, sans-serif">
-                  {formatLen(d.w, units)} × {formatLen(d.d, units)}
-                </text>
-              </g>
+              <rect x={ix - 78} y={iy - radius - 30} width={156} height={20} rx={10} fill={ACCENT} />
+              <text x={ix} y={iy - radius - 16} textAnchor="middle" fontSize={11.5} fontWeight={700} fill="#20160a" fontFamily="-apple-system, system-ui, sans-serif">
+                {formatLen(d.w, units)} × {formatLen(d.d, units)}
+              </text>
             </g>
           )
         })()}
 
-        {/* selected room handles */}
-        {selRoom && (() => {
-          const hs = roomHandles(selRoom)
+        {/* selected room wall: highlight endpoints + length */}
+        {selected?.type === 'roomwall' && (() => {
+          const r = rooms.find((o) => o.uid === selected.uid)
+          if (!r) return null
+          const [x1, z1, x2, z2] = roomSide(r, selected.side)
+          const [ax, ay] = toScreen(x1, z1)
+          const [bx, by] = toScreen(x2, z2)
+          const len = Math.hypot(x2 - x1, z2 - z1)
+          const on = wallOn(r, selected.side)
           return (
             <g pointerEvents="none">
-              {Object.entries(hs).map(([k, [hx, hy]]) => (
-                <circle key={k} cx={hx} cy={hy} r={k.length === 2 ? 7 : 5.5} fill={ACCENT} stroke="#20160a" strokeWidth={2} filter="url(#softshadow)" />
-              ))}
-            </g>
-          )
-        })()}
-
-        {/* selected wall endpoints */}
-        {selWall && (() => {
-          const [ax, ay] = toScreen(selWall.x1, selWall.z1)
-          const [bx, by] = toScreen(selWall.x2, selWall.z2)
-          return (
-            <g pointerEvents="none">
-              <circle cx={ax} cy={ay} r={7} fill="#fff" stroke={ACCENT} strokeWidth={2.5} filter="url(#softshadow)" />
-              <circle cx={bx} cy={by} r={7} fill="#fff" stroke={ACCENT} strokeWidth={2.5} filter="url(#softshadow)" />
+              <circle cx={ax} cy={ay} r={6} fill="#fff" stroke={ACCENT} strokeWidth={2.5} filter="url(#softshadow)" />
+              <circle cx={bx} cy={by} r={6} fill="#fff" stroke={ACCENT} strokeWidth={2.5} filter="url(#softshadow)" />
+              <rect x={(ax + bx) / 2 - 60} y={(ay + by) / 2 - 11} width={120} height={20} rx={10} fill={ACCENT} />
+              <text x={(ax + bx) / 2} y={(ay + by) / 2 + 3} textAnchor="middle" fontSize={11} fontWeight={700} fill="#20160a" fontFamily="-apple-system, system-ui, sans-serif">
+                {on ? formatLen(len, units) : 'opening'}
+              </text>
             </g>
           )
         })()}
       </svg>
+
+      <button className="recenter" onClick={fitView} aria-label="Fit to view"><IconCenter size={20} /></button>
 
       {empty && (
         <div className="empty">
@@ -471,9 +537,10 @@ export default function Editor2D() {
         {tool === 'room' ? 'Drag to draw a room'
           : tool === 'wall' ? 'Drag to draw a wall'
           : selItem ? 'Drag to move · drag white corners to resize'
-          : selRoom ? 'Drag to move · drag dots to resize · pinch to zoom'
-          : selWall ? 'Drag the wall or its endpoints · pinch to zoom'
-          : 'Drag to pan · pinch to zoom · tap an object to select'}
+          : selRoom ? 'Drag inside to move · corners to resize · tap a wall to edit it'
+          : selWall ? 'Drag the wall or its endpoints'
+          : selected?.type === 'roomwall' ? 'Use the button to delete or restore this wall'
+          : 'Drag to pan · pinch to zoom · tap a wall to select it'}
       </div>
     </div>
   )

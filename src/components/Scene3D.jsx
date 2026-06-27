@@ -302,16 +302,13 @@ export default function Scene3D() {
       const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshStandardMaterial({ map: wood, roughness: 0.65, metalness: 0.02 }))
       floor.rotation.x = -Math.PI / 2; floor.position.set(cx, 0, cz); floor.receiveShadow = true
       r.roomGroup.add(floor)
-      // 4 walls
-      addWallBox(w + t, height, t, cx, height / 2, z - t / 2, 0, -1, true)
-      addWallBox(w + t, height, t, cx, height / 2, z + d + t / 2, 0, 1, true)
-      addWallBox(t, height, d + t, x - t / 2, height / 2, cz, -1, 0, true)
-      addWallBox(t, height, d + t, x + w + t / 2, height / 2, cz, 1, 0, true)
-      // skirting
-      const sk1 = new THREE.Mesh(new THREE.BoxGeometry(w, 0.09, 0.04), skirtMat); sk1.position.set(cx, 0.045, z + 0.02); r.roomGroup.add(sk1)
-      const sk2 = new THREE.Mesh(new THREE.BoxGeometry(w, 0.09, 0.04), skirtMat); sk2.position.set(cx, 0.045, z + d - 0.02); r.roomGroup.add(sk2)
-      const sk3 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.09, d), skirtMat); sk3.position.set(x + 0.02, 0.045, cz); r.roomGroup.add(sk3)
-      const sk4 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.09, d), skirtMat); sk4.position.set(x + w - 0.02, 0.045, cz); r.roomGroup.add(sk4)
+      // 4 walls (skip sides that have been deleted to create openings)
+      const on = (s) => !room.wallsOn || room.wallsOn[s] !== false
+      const skirt = (geo, px, pz) => { const m = new THREE.Mesh(geo, skirtMat); m.position.set(px, 0.045, pz); r.roomGroup.add(m) }
+      if (on('n')) { addWallBox(w + t, height, t, cx, height / 2, z - t / 2, 0, -1, true); skirt(new THREE.BoxGeometry(w, 0.09, 0.04), cx, z + 0.02) }
+      if (on('s')) { addWallBox(w + t, height, t, cx, height / 2, z + d + t / 2, 0, 1, true); skirt(new THREE.BoxGeometry(w, 0.09, 0.04), cx, z + d - 0.02) }
+      if (on('w')) { addWallBox(t, height, d + t, x - t / 2, height / 2, cz, -1, 0, true); skirt(new THREE.BoxGeometry(0.04, 0.09, d), x + 0.02, cz) }
+      if (on('e')) { addWallBox(t, height, d + t, x + w + t / 2, height / 2, cz, 1, 0, true); skirt(new THREE.BoxGeometry(0.04, 0.09, d), x + w - 0.02, cz) }
     }
 
     // free walls (always visible)
