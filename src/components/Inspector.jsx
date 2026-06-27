@@ -16,6 +16,42 @@ function Slider({ label, value, min, max, step, onChange, display }) {
   )
 }
 
+// Precise length control: type exact feet + inches (or metres) — down to the inch.
+function MeasureRow({ label, m, min, max, units, onChange }) {
+  const clamp = (v) => Math.max(min, Math.min(max, v))
+  const totIn = m / 0.0254
+  const ft = Math.floor(totIn / 12 + 1e-6)
+  const inRem = Math.round((totIn - ft * 12) * 100) / 100
+  const fromFtIn = (f, i) => onChange(clamp((f * 12 + i) * 0.0254))
+  return (
+    <div className="row measure-row">
+      <div className="measure-head">
+        <div className="label">{label}</div>
+        <div className="measure-inputs">
+          {units === 'ft' ? (
+            <>
+              <input type="number" value={ft} min={0} step={1}
+                onChange={(e) => fromFtIn(Math.max(0, Math.floor(Number(e.target.value) || 0)), inRem)} />
+              <span className="u">ft</span>
+              <input type="number" value={inRem} min={0} max={11.99} step={0.25}
+                onChange={(e) => fromFtIn(ft, Number(e.target.value) || 0)} />
+              <span className="u">in</span>
+            </>
+          ) : (
+            <>
+              <input type="number" value={Number(m.toFixed(3))} min={min} max={max} step={0.01}
+                onChange={(e) => onChange(clamp(Number(e.target.value) || min))} />
+              <span className="u">m</span>
+            </>
+          )}
+        </div>
+      </div>
+      <input className="measure-slider" type="range" min={min} max={max} step={0.0254}
+        value={m} onChange={(e) => onChange(Number(e.target.value))} />
+    </div>
+  )
+}
+
 export default function Inspector({ onClose, onFlash }) {
   const { state, dispatch } = useStore()
   const { selected, units, items, rooms, walls, builtins } = state
@@ -98,9 +134,9 @@ export default function Inspector({ onClose, onFlash }) {
       <>
         <Head title="Room" sub={`${formatLen(room.w, units)} × ${formatLen(room.d, units)}`} onClose={onClose} />
         <div className="insp">
-          <Slider label="Width" value={room.w} min={0.5} max={40} step={0.1} onChange={(v) => set({ w: v }, `rw:${room.uid}`)} display={formatLen(room.w, units)} />
-          <Slider label="Depth" value={room.d} min={0.5} max={40} step={0.1} onChange={(v) => set({ d: v }, `rd:${room.uid}`)} display={formatLen(room.d, units)} />
-          <Slider label="Wall height" value={room.height} min={1.5} max={6} step={0.1} onChange={(v) => set({ height: v }, `rh:${room.uid}`)} display={formatLen(room.height, units)} />
+          <MeasureRow label="Width" m={room.w} min={0.5} max={40} units={units} onChange={(v) => set({ w: v }, `rw:${room.uid}`)} />
+          <MeasureRow label="Depth" m={room.d} min={0.5} max={40} units={units} onChange={(v) => set({ d: v }, `rd:${room.uid}`)} />
+          <MeasureRow label="Wall height" m={room.height} min={1.5} max={6} units={units} onChange={(v) => set({ height: v }, `rh:${room.uid}`)} />
           <div className="row"><div className="label">Floor area</div><div className="val">{units === 'm' ? `${area.toFixed(1)} m²` : `${Math.round(area * 10.7639)} ft²`}</div></div>
           <div className="row">
             <div className="label">Wall sides</div>

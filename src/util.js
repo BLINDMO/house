@@ -15,7 +15,8 @@ export function feetInches(m) {
   if (total < 12) return `${total}″`
   const ft = Math.floor(total / 12)
   const inch = total - ft * 12
-  return inch ? `${ft}′ (${inch}″)` : `${ft}′`
+  const base = inch ? `${ft}′${inch}″` : `${ft}′`
+  return `${base} (${total}″)`
 }
 
 export function formatLen(m, units) {

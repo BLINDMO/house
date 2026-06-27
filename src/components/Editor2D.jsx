@@ -9,8 +9,8 @@ const ACCENT = '#d9b779'
 const WALL_ON = '#39414f'
 const WALL_OFF = '#c3c9d1'
 const FLOOR = '#eef1f5'
-const GRID = 0.1
-const ITEM_GRID = 0.05
+const INCH = 0.0254
+const ITEM_GRID = INCH // free placement to the inch
 const HANDLE_HIT = 18
 const SIDES = ['n', 'e', 's', 'w']
 
@@ -38,6 +38,8 @@ function distToSeg(px, pz, x1, z1, x2, z2) {
 export default function Editor2D() {
   const { state, dispatch } = useStore()
   const { rooms, walls, items, selected, units, tool, defaultHeight } = state
+  // Free placement down to the inch (or 1 cm in metric) — no coarse 2" grid.
+  const SNAP = units === 'ft' ? INCH : 0.01
   const wrapRef = useRef(null)
   const svgRef = useRef(null)
   const [size, setSize] = useState({ W: 360, H: 540 })
@@ -199,8 +201,8 @@ export default function Editor2D() {
     for (const t of targets) { const d = Math.abs(v - t); if (d < bd) { bd = d; best = t } }
     return best
   }
-  const snapX = (v, except) => { const t = snapEdge(v, edgeTargets(except).xs); return t != null ? t : snap(v, GRID) }
-  const snapZ = (v, except) => { const t = snapEdge(v, edgeTargets(except).zs); return t != null ? t : snap(v, GRID) }
+  const snapX = (v, except) => { const t = snapEdge(v, edgeTargets(except).xs); return t != null ? t : snap(v, SNAP) }
+  const snapZ = (v, except) => { const t = snapEdge(v, edgeTargets(except).zs); return t != null ? t : snap(v, SNAP) }
 
   const onDown = (e) => {
     const [px, py] = ptr(e)
@@ -321,12 +323,12 @@ export default function Editor2D() {
         const sr = snapEdge(left + r.w, xs)
         if (sl != null && (sr == null || Math.abs(left - sl) <= Math.abs(left + r.w - sr))) left = sl
         else if (sr != null) left = sr - r.w
-        else left = snap(left, GRID)
+        else left = snap(left, SNAP)
         const st = snapEdge(top, zs)
         const sb = snapEdge(top + r.d, zs)
         if (st != null && (sb == null || Math.abs(top - st) <= Math.abs(top + r.d - sb))) top = st
         else if (sb != null) top = sb - r.d
-        else top = snap(top, GRID)
+        else top = snap(top, SNAP)
       }
       dispatch({ type: 'update', sel: { type: 'room', uid: g.uid }, patch: { x: left, z: top }, mergeKey: `mv:${g.uid}` })
     } else if (g.kind === 'resizeRoom') {
@@ -335,19 +337,19 @@ export default function Editor2D() {
       let right = g.x0 + g.w0
       let bottom = g.z0 + g.d0
       const { xs, zs } = edgeTargets(g.uid)
-      const sX = (v) => { const t = snapEdge(v, xs); return t != null ? t : snap(v, GRID) }
-      const sZ = (v) => { const t = snapEdge(v, zs); return t != null ? t : snap(v, GRID) }
+      const sX = (v) => { const t = snapEdge(v, xs); return t != null ? t : snap(v, SNAP) }
+      const sZ = (v) => { const t = snapEdge(v, zs); return t != null ? t : snap(v, SNAP) }
       if (g.handle.includes('e')) right = Math.max(left + 0.5, sX(wx))
       if (g.handle.includes('w')) left = Math.min(right - 0.5, sX(wx))
       if (g.handle.includes('s')) bottom = Math.max(top + 0.5, sZ(wz))
       if (g.handle.includes('n')) top = Math.min(bottom - 0.5, sZ(wz))
       dispatch({ type: 'update', sel: { type: 'room', uid: g.uid }, patch: { x: left, z: top, w: right - left, d: bottom - top }, mergeKey: `rs:${g.uid}` })
     } else if (g.kind === 'moveWall') {
-      const dx = snap(wx - g.ox, GRID)
-      const dz = snap(wz - g.oz, GRID)
+      const dx = snap(wx - g.ox, SNAP)
+      const dz = snap(wz - g.oz, SNAP)
       dispatch({ type: 'update', sel: { type: 'wall', uid: g.uid }, patch: { x1: g.x1 + dx, z1: g.z1 + dz, x2: g.x2 + dx, z2: g.z2 + dz }, mergeKey: `mv:${g.uid}` })
     } else if (g.kind === 'wallEnd') {
-      const patch = g.end === '1' ? { x1: snap(wx, GRID), z1: snap(wz, GRID) } : { x2: snap(wx, GRID), z2: snap(wz, GRID) }
+      const patch = g.end === '1' ? { x1: snap(wx, SNAP), z1: snap(wz, SNAP) } : { x2: snap(wx, SNAP), z2: snap(wz, SNAP) }
       dispatch({ type: 'update', sel: { type: 'wall', uid: g.uid }, patch, mergeKey: `we:${g.uid}` })
     }
   }
@@ -383,25 +385,38 @@ export default function Editor2D() {
     setXf({ scale: ns, panX: px - wx * ns, panY: py - wy * ns, init: true })
   }
 
-  // grid
+  // graph-paper grid + edge rulers, in display units (feet or metres)
   const gridLines = []
+  const gridLabels = []
   {
+    const U = units === 'ft' ? 0.3048 : 1 // metres per display unit
+    const ppu = scale * U // screen px per display unit
+    let minor = 1
+    if (ppu < 6) minor = 5
+    if (ppu * minor < 6) minor = 25
+    const major = minor * 5
     const [wl] = toWorld(0, 0)
     const [wr] = toWorld(W, 0)
     const [, wt] = toWorld(0, 0)
     const [, wb] = toWorld(0, H)
-    const span = Math.max(wr - wl, wb - wt)
-    const step = span > 60 ? 5 : 1
-    if (span / step < 240) {
-      for (let x = Math.ceil(wl / step) * step; x <= wr; x += step) {
-        const [sx] = toScreen(x, 0)
-        const axis = Math.abs(x) < 1e-6
-        gridLines.push(<line key={`v${x}`} x1={sx} y1={0} x2={sx} y2={H} stroke="#000" strokeOpacity={axis ? 0.16 : 0.055} strokeWidth={1} />)
+    const dl = wl / U, dr = wr / U, dt = wt / U, db = wb / U
+    const unit = units === 'ft' ? '′' : 'm'
+    if ((dr - dl) / minor < 500) {
+      for (let n = Math.ceil(dl / minor) * minor; n <= dr; n += minor) {
+        const r = Math.round(n)
+        const [sx] = toScreen(r * U, 0)
+        const axis = r === 0
+        const isMajor = r % major === 0
+        gridLines.push(<line key={`v${r}`} x1={sx} y1={0} x2={sx} y2={H} stroke="#000" strokeOpacity={axis ? 0.22 : isMajor ? 0.11 : 0.045} strokeWidth={1} />)
+        if (isMajor && !axis) gridLabels.push(<text key={`vl${r}`} x={sx + 3} y={12} fontSize={9.5} fill="#8a929c" fontFamily="-apple-system, system-ui, sans-serif">{r}{unit}</text>)
       }
-      for (let z = Math.ceil(wt / step) * step; z <= wb; z += step) {
-        const [, sy] = toScreen(0, z)
-        const axis = Math.abs(z) < 1e-6
-        gridLines.push(<line key={`h${z}`} x1={0} y1={sy} x2={W} y2={sy} stroke="#000" strokeOpacity={axis ? 0.16 : 0.055} strokeWidth={1} />)
+      for (let n = Math.ceil(dt / minor) * minor; n <= db; n += minor) {
+        const r = Math.round(n)
+        const [, sy] = toScreen(0, r * U)
+        const axis = r === 0
+        const isMajor = r % major === 0
+        gridLines.push(<line key={`h${r}`} x1={0} y1={sy} x2={W} y2={sy} stroke="#000" strokeOpacity={axis ? 0.22 : isMajor ? 0.11 : 0.045} strokeWidth={1} />)
+        if (isMajor && !axis) gridLabels.push(<text key={`hl${r}`} x={3} y={sy - 3} fontSize={9.5} fill="#8a929c" fontFamily="-apple-system, system-ui, sans-serif">{r}{unit}</text>)
       }
     }
   }
@@ -420,6 +435,7 @@ export default function Editor2D() {
 
         <rect x={0} y={0} width={W} height={H} fill="transparent" />
         <g pointerEvents="none">{gridLines}</g>
+        <g pointerEvents="none">{gridLabels}</g>
 
         {/* room floors */}
         {rooms.map((r) => {
