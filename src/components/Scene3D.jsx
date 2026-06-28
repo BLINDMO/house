@@ -151,13 +151,13 @@ function woodTexture(baseHex = '#b08a5e') {
 
 export default function Scene3D({ onOpenInspector }) {
   const { state, dispatch } = useStore()
-  const { rooms, walls, items, builtins, openings, selected, ambiance, quality } = state
+  const { rooms, walls, items, builtins, openings, selected, ambiance, quality, visitMode } = state
   const { map: assetMap } = useAssets()
   const mountRef = useRef(null)
   const menuRef = useRef(null)
   const refs = useRef({})
   const live = useRef({})
-  live.current = { rooms, walls, items, selected, dispatch, onOpenInspector, openingMode: state.openingMode, openShape: state.openShape }
+  live.current = { rooms, walls, items, selected, dispatch, onOpenInspector, openingMode: state.openingMode, openShape: state.openShape, visitMode: state.visitMode }
 
   // resolve a finish "tex" string to a cached base texture, or null for solid colour
   function finishBase(tex) {
@@ -389,6 +389,7 @@ export default function Scene3D({ onOpenInspector }) {
       key, fill, ambient, hemi, pmrem, ring, gizmo, builtinGroup, composer, gtao, openPreview,
       woodCache: new Map(), imgCache: new Map(), roomTexList: [], walls: [], itemMap: new Map(), framed: false,
       raycaster: new THREE.Raycaster(), drag: null, rotate: null, pending: null, drawOpen: null,
+      fp: { yaw: 0, pitch: 0, move: { f: 0, b: 0, l: 0, r: 0 }, look: null }, visit: false,
     })
 
     const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
@@ -426,6 +427,13 @@ export default function Scene3D({ onOpenInspector }) {
       const rc = refs.current.raycaster
       rc.setFromCamera(ndc, camera)
       const { items: its, selected: selNow, dispatch: dsp } = live.current
+
+      // walk-through: drag anywhere to look around
+      if (live.current.visitMode) {
+        refs.current.fp.look = { x: e.clientX, y: e.clientY }
+        dom.setPointerCapture?.(e.pointerId)
+        return
+      }
 
       // 3D opening mode: press on a (visible) wall and drag to draw the opening
       if (live.current.openingMode) {
@@ -483,6 +491,15 @@ export default function Scene3D({ onOpenInspector }) {
     const onMove = (e) => {
       setNDC(e)
       const r = refs.current
+      if (r.visit) {
+        const lk = r.fp.look
+        if (lk) {
+          r.fp.yaw -= (e.clientX - lk.x) * 0.005
+          r.fp.pitch = Math.max(-1.2, Math.min(1.2, r.fp.pitch - (e.clientY - lk.y) * 0.005))
+          lk.x = e.clientX; lk.y = e.clientY
+        }
+        return
+      }
       if (r.drawOpen) {
         const d = r.drawOpen
         r.raycaster.setFromCamera(ndc, camera)
@@ -511,6 +528,7 @@ export default function Scene3D({ onOpenInspector }) {
     }
     const onUp = (e) => {
       const r = refs.current
+      if (r.visit) { r.fp.look = null; try { dom.releasePointerCapture?.(e.pointerId) } catch { /* noop */ } return }
       if (r.drawOpen) {
         const d = r.drawOpen
         r.drawOpen = null
@@ -570,16 +588,49 @@ export default function Scene3D({ onOpenInspector }) {
     dom.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
 
+    // WASD / arrow keys drive walk-through movement
+    const keyMove = (down) => (ev) => {
+      const m = refs.current.fp.move
+      const k = ev.key.toLowerCase()
+      const v = down ? 1 : 0
+      if (k === 'w' || k === 'arrowup') m.f = v
+      else if (k === 's' || k === 'arrowdown') m.b = v
+      else if (k === 'a' || k === 'arrowleft') m.l = v
+      else if (k === 'd' || k === 'arrowright') m.r = v
+      else return
+      if (refs.current.visit) ev.preventDefault()
+    }
+    const onKeyDown = keyMove(true)
+    const onKeyUp = keyMove(false)
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+
     let raf
+    const _fwd = new THREE.Vector3()
+    const _right = new THREE.Vector3()
+    const _up = new THREE.Vector3(0, 1, 0)
     const tick = () => {
-      controls.update()
+      const r = refs.current
+      if (r.visit) {
+        const fp = r.fp
+        camera.quaternion.setFromEuler(new THREE.Euler(fp.pitch, fp.yaw, 0, 'YXZ'))
+        _fwd.set(0, 0, -1).applyQuaternion(camera.quaternion); _fwd.y = 0; _fwd.normalize()
+        _right.crossVectors(_fwd, _up).normalize()
+        const mz = fp.move.f - fp.move.b
+        const mx = fp.move.r - fp.move.l
+        if (mz || mx) camera.position.addScaledVector(_fwd, mz * 0.055).addScaledVector(_right, mx * 0.055)
+        camera.position.y = 1.6
+      } else {
+        controls.update()
+      }
       const cp = camera.position
-      for (const w of refs.current.walls) {
+      if (!r.visit) for (const w of refs.current.walls) {
         const d = (cp.x - w.center.x) * w.normal.x + (cp.z - w.center.z) * w.normal.z
         if (!w.hidden && d > 0.1) w.hidden = true
         else if (w.hidden && d < -0.1) w.hidden = false
         w.mesh.visible = !w.hidden
       }
+      if (r.visit) for (const w of refs.current.walls) { if (w.hidden) { w.hidden = false; w.mesh.visible = true } }
       // position the floating ⋯ button just above the selected item
       const btn = menuRef.current
       if (btn) {
@@ -619,6 +670,8 @@ export default function Scene3D({ onOpenInspector }) {
       dom.removeEventListener('pointerdown', onDown, true)
       dom.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
       controls.dispose()
       disposeGroup(roomGroup); disposeGroup(furnitureGroup); disposeGroup(builtinGroup)
       ring.geometry.dispose(); ring.material.dispose()
@@ -669,6 +722,27 @@ export default function Scene3D({ onOpenInspector }) {
     r.useComposer = q === 'max'
     r.renderer.shadowMap.needsUpdate = true
   }, [quality])
+
+  // ---- walk-through (first-person) enter / exit ----
+  useEffect(() => {
+    const r = refs.current
+    if (!r.camera) return
+    r.visit = visitMode
+    if (visitMode) {
+      r.controls.enabled = false
+      const { rooms: rs } = live.current
+      let cx = 0, cz = 0
+      if (rs.length) { const rm = rs[0]; cx = rm.x + rm.w / 2; cz = rm.z + rm.d / 2 }
+      r.camera.position.set(cx, 1.6, cz)
+      r.fp.yaw = 0; r.fp.pitch = 0
+      r.fp.move = { f: 0, b: 0, l: 0, r: 0 }
+      r.fp.look = null
+    } else {
+      r.controls.enabled = true
+      reframe()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visitMode])
 
   // ---- rooms + walls shell ----
   useEffect(() => {
@@ -913,10 +987,30 @@ export default function Scene3D({ onOpenInspector }) {
       : selected.type === 'builtin' ? 'Built-in' : 'Selection'
     : null
 
+  const press = (dir) => ({
+    onPointerDown: (e) => { e.preventDefault(); refs.current.fp.move[dir] = 1 },
+    onPointerUp: () => { refs.current.fp.move[dir] = 0 },
+    onPointerLeave: () => { refs.current.fp.move[dir] = 0 },
+    onPointerCancel: () => { refs.current.fp.move[dir] = 0 },
+  })
+
   return (
     <div className="scene3d" ref={mountRef}>
       <button className="recenter" onClick={reframe} aria-label="Recenter view"><IconCenter size={20} /></button>
       <button ref={menuRef} style={{ display: 'none' }} aria-hidden="true" />
+
+      {visitMode && (
+        <>
+          <div className="visit-hint">Drag to look · pad or WASD to walk</div>
+          <button className="visit-exit" onClick={() => dispatch({ type: 'visitMode', value: false })}>Exit walk-through</button>
+          <div className="visit-pad">
+            <button className="vp up" {...press('f')} aria-label="Forward">▲</button>
+            <button className="vp left" {...press('l')} aria-label="Left">◀</button>
+            <button className="vp right" {...press('r')} aria-label="Right">▶</button>
+            <button className="vp down" {...press('b')} aria-label="Back">▼</button>
+          </div>
+        </>
+      )}
 
       {selected && (
         <div className="edit-bar" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>

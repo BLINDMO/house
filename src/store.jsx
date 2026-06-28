@@ -12,6 +12,7 @@ function starter() {
     tool: 'select', // 'select' | 'room' | 'wall'
     openingMode: false, // 3D: draw on a wall to cut a door/window
     openShape: 'rect', // opening shape while drawing: rect|round|arch|star
+    visitMode: false, // 3D: first-person walk-through
     units: 'ft',
     ambiance: 'day',
     quality: 'high', // 'normal' | 'high' | 'max' — render quality vs performance
@@ -37,7 +38,7 @@ function load() {
     if (!data || !Array.isArray(data.items)) return starter()
     const view = data.view === '3d' ? '3d' : '2d' // Side view was removed
     const ambiance = data.ambiance === 'night' ? 'night' : 'day' // Dusk was removed
-    return { ...starter(), ...data, view, ambiance, tool: 'select', openingMode: false, selected: null }
+    return { ...starter(), ...data, view, ambiance, tool: 'select', openingMode: false, visitMode: false, selected: null }
   } catch {
     return starter()
   }
@@ -104,11 +105,13 @@ function patchOne(state, type, id, patch) {
 function reducer(state, action) {
   switch (action.type) {
     case 'view':
-      return { ...state, view: action.view, openingMode: action.view === '3d' ? state.openingMode : false }
+      return { ...state, view: action.view, openingMode: action.view === '3d' ? state.openingMode : false, visitMode: action.view === '3d' ? state.visitMode : false }
     case 'openingMode':
       return { ...state, openingMode: action.value, selected: action.value ? null : state.selected }
     case 'openShape':
       return { ...state, openShape: action.value }
+    case 'visitMode':
+      return { ...state, visitMode: action.value, selected: action.value ? null : state.selected, openingMode: action.value ? false : state.openingMode }
     case 'ambiance':
       return { ...state, ambiance: action.value }
     case 'quality':
@@ -236,7 +239,7 @@ function root(c, action) {
     const prev = c.past[c.past.length - 1]
     return {
       past: c.past.slice(0, -1),
-      present: { ...prev, view: c.present.view, units: c.present.units, ambiance: c.present.ambiance, quality: c.present.quality, tool: c.present.tool, openingMode: c.present.openingMode, openShape: c.present.openShape },
+      present: { ...prev, view: c.present.view, units: c.present.units, ambiance: c.present.ambiance, quality: c.present.quality, tool: c.present.tool, openingMode: c.present.openingMode, openShape: c.present.openShape, visitMode: c.present.visitMode },
       future: [c.present, ...c.future].slice(0, LIMIT),
       lastKey: null, lastTime: 0,
     }
@@ -246,7 +249,7 @@ function root(c, action) {
     const next = c.future[0]
     return {
       past: [...c.past, c.present].slice(-LIMIT),
-      present: { ...next, view: c.present.view, units: c.present.units, ambiance: c.present.ambiance, quality: c.present.quality, tool: c.present.tool, openingMode: c.present.openingMode, openShape: c.present.openShape },
+      present: { ...next, view: c.present.view, units: c.present.units, ambiance: c.present.ambiance, quality: c.present.quality, tool: c.present.tool, openingMode: c.present.openingMode, openShape: c.present.openShape, visitMode: c.present.visitMode },
       future: c.future.slice(1),
       lastKey: null, lastTime: 0,
     }
