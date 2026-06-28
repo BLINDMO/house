@@ -118,7 +118,7 @@ export default function App() {
           {view === '2d' ? <Editor2D /> : <Scene3D onOpenInspector={() => setOverride('inspector')} />}
         </main>
 
-        {panel && <div className="panel-scrim" onClick={closePanel} />}
+        {panel && panel !== 'inspector' && <div className="panel-scrim" onClick={closePanel} />}
         {panel && (
           <Panel kind={panel} onClose={closePanel} onFlash={flash} onPick={addKind} />
         )}

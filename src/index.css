@@ -1467,3 +1467,41 @@ input[type='range']::-moz-range-thumb {
 .gen-sizes { display: flex; gap: 7px; }
 .gen-buttons { display: flex; gap: 10px; margin-top: 6px; }
 .gen-buttons .start-btn { flex-direction: row; align-items: center; justify-content: center; }
+
+/* ---------- 3D selection edit menu ---------- */
+.edit-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 56px;
+  transform: translateX(-50%);
+  z-index: 16;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: rgba(20, 23, 29, 0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-2);
+  max-width: 92vw;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.edit-bar-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-2);
+  padding: 0 6px 0 4px;
+}
+.edit-bar button {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text);
+  padding: 7px 12px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.edit-bar button:active { transform: scale(0.95); }
+.edit-bar button.danger { color: var(--danger); }

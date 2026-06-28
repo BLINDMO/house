@@ -536,14 +536,24 @@ export default function Scene3D({ onOpenInspector }) {
       }
       if (r.drag || r.rotate) { r.drag = null; r.rotate = null; controls.enabled = true }
       else if (r.pending) {
-        // A tap (not a drag) on empty space: if something is selected, just
-        // deselect it. Only when nothing is selected does tapping a room's
-        // floor select that room and open its inspector (edit flooring).
+        // A tap (not a drag): a wall selects that wall to edit; a room's floor
+        // selects the room; empty space / grass deselects.
         if (Math.hypot(e.clientX - r.pending.x, e.clientY - r.pending.y) < 5) {
-          if (live.current.selected) {
+          setNDC(e)
+          r.raycaster.setFromCamera(ndc, camera)
+          const wm = r.wallMeshes || []
+          const wh = wm.length ? r.raycaster.intersectObjects(wm.map((m) => m.mesh), false) : []
+          if (wh.length) {
+            const rec = wm.find((m) => m.mesh === wh[0].object)
+            const ref = rec.ref
+            const sel = ref.kind === 'room'
+              ? { type: 'roomwall', uid: ref.uid, side: ref.side }
+              : { type: 'wall', uid: ref.uid }
+            live.current.dispatch({ type: 'select', sel })
+            live.current.onOpenInspector?.()
+          } else if (live.current.selected) {
             live.current.dispatch({ type: 'select', sel: null })
           } else {
-            setNDC(e)
             const p = floorHit()
             const rm = p && live.current.rooms.find((q) => p.x >= q.x && p.x <= q.x + q.w && p.z >= q.z && p.z <= q.z + q.d)
             if (rm) {
@@ -892,20 +902,37 @@ export default function Scene3D({ onOpenInspector }) {
     r.controls.update()
   }
 
+  // ---- 3D edit menu for the current selection ----
+  const selItem = selected?.type === 'item' ? items.find((i) => i.uid === selected.uid) : null
+  const removable = selected && selected.type !== 'roomwall'
+  const selName = selected
+    ? selItem ? (defFor(selItem.type)?.name || 'Piece')
+      : selected.type === 'room' ? 'Room'
+      : selected.type === 'wall' || selected.type === 'roomwall' ? 'Wall'
+      : selected.type === 'opening' ? 'Opening'
+      : selected.type === 'builtin' ? 'Built-in' : 'Selection'
+    : null
+
   return (
     <div className="scene3d" ref={mountRef}>
       <button className="recenter" onClick={reframe} aria-label="Recenter view"><IconCenter size={20} /></button>
-      <button
-        ref={menuRef}
-        className="piece-menu"
-        style={{ display: 'none' }}
-        aria-label="Edit piece"
-        title="Edit this piece"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => { e.stopPropagation(); live.current.onOpenInspector?.() }}
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
-      </button>
+      <button ref={menuRef} style={{ display: 'none' }} aria-hidden="true" />
+
+      {selected && (
+        <div className="edit-bar" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
+          <span className="edit-bar-name">{selName}</span>
+          <button onClick={() => onOpenInspector?.()}>Edit</button>
+          {selItem && (
+            <button onClick={() => dispatch({ type: 'update', sel: selected, patch: { rot: ((selItem.rot || 0) + 90) % 360 } })}>Rotate</button>
+          )}
+          {removable && (
+            <button onClick={() => dispatch({ type: 'duplicate', sel: selected })}>Duplicate</button>
+          )}
+          {removable
+            ? <button className="danger" onClick={() => dispatch({ type: 'remove', sel: selected })}>Delete</button>
+            : <button onClick={() => onOpenInspector?.()}>Open / Close</button>}
+        </div>
+      )}
     </div>
   )
 }

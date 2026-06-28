@@ -505,11 +505,10 @@ export default function Editor2D() {
           }
         }
       } else if (g.kind === 'drawRoom') {
+        // Only create once an actual rectangle has been dragged — a stray tap
+        // shouldn't drop a room (and pop its menu) before you've drawn anything.
         if (g.cur.w > 0.3 && g.cur.d > 0.3) {
           dispatch({ type: 'addRoom', x: g.cur.x, z: g.cur.z, w: g.cur.w, d: g.cur.d, height: defaultHeight })
-        } else {
-          // a tap (no real drag) drops a default room so it's one-tap to start
-          dispatch({ type: 'addRoom', x: snapX(g.x0 - 1.8), z: snapZ(g.z0 - 1.5), w: 3.6, d: 3, height: defaultHeight })
         }
       } else if (g.kind === 'drawWall' && Math.hypot(g.cur.x2 - g.cur.x1, g.cur.z2 - g.cur.z1) > 0.2) {
         dispatch({ type: 'addWall', ...g.cur, height: defaultHeight })
