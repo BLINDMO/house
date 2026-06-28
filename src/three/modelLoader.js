@@ -2,7 +2,17 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { phGltf } from '../data/phModels.js'
 
-const loader = new GLTFLoader()
+// Poly Haven's glTF references its textures with a folder-relative path
+// (textures/<file>.jpg), but on the CDN those maps don't live next to the
+// glTF — they're served from Models/jpg/<res>/<id>/<file>.jpg. Rewrite the
+// resolved texture URL so runtime CDN loads come through fully textured.
+// (Local copies keep their textures alongside, so this pattern won't match.)
+const manager = new THREE.LoadingManager()
+manager.setURLModifier((url) =>
+  url.replace(/\/Models\/gltf\/([^/]+)\/([^/]+)\/textures\//, '/Models/jpg/$1/$2/')
+)
+
+const loader = new GLTFLoader(manager)
 const cache = new Map() // id -> Promise<{ proto, dim }>
 
 // Load (once, cached) a Poly Haven glTF model, normalised so it sits centred on
