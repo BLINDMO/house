@@ -5,7 +5,7 @@ import Footprint from './Footprint.jsx'
 // Built-in procedural furniture library — everything renders from code (no
 // asset downloads), so pieces are fully movable, scalable and recolourable.
 const LIBRARY = CATALOG.map((c) => ({ key: c.type, type: c.type, name: c.name, category: c.category, proc: c }))
-const CAT_ORDER = ['Seating', 'Tables', 'Bedroom', 'Storage', 'Appliances', 'Lighting', 'Electronics', 'Decor', 'Kitchen']
+const CAT_ORDER = ['Seating', 'Tables', 'Bedroom', 'Storage', 'Kitchen', 'Appliances', 'Bathroom', 'Office', 'Decor']
 const CATS = ['All', ...CAT_ORDER.filter((c) => LIBRARY.some((i) => i.category === c))]
 
 function ProcThumb({ item }) {

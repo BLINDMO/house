@@ -7,8 +7,11 @@ export const CATEGORIES = [
   'Tables',
   'Bedroom',
   'Storage',
-  'Decor',
   'Kitchen',
+  'Appliances',
+  'Bathroom',
+  'Office',
+  'Decor',
 ]
 
 export const CATALOG = [
@@ -49,7 +52,29 @@ export const CATALOG = [
   // ---------- Kitchen ----------
   { type: 'fridge', name: 'Fridge', category: 'Kitchen', w: 0.72, d: 0.7, h: 1.85, color: '#cfd4da', shape: 'fridge' },
   { type: 'counter', name: 'Counter', category: 'Kitchen', w: 1.2, d: 0.6, h: 0.9, color: '#8e8e8e', shape: 'counter' },
+  { type: 'island', name: 'Kitchen Island', category: 'Kitchen', w: 1.4, d: 0.9, h: 0.9, color: '#7d7f83', shape: 'counter' },
   { type: 'range', name: 'Range', category: 'Kitchen', w: 0.6, d: 0.62, h: 0.9, color: '#4a4d52', shape: 'range' },
+  { type: 'oven', name: 'Stove / Oven', category: 'Kitchen', w: 0.6, d: 0.62, h: 0.9, color: '#d3d7dc', shape: 'oven' },
+  { type: 'sink', name: 'Kitchen Sink', category: 'Kitchen', w: 0.85, d: 0.6, h: 0.9, color: '#7a5c41', shape: 'sink' },
+  { type: 'dishwasher', name: 'Dishwasher', category: 'Kitchen', w: 0.6, d: 0.6, h: 0.85, color: '#cfd4da', shape: 'appliance' },
+
+  // ---------- Appliances ----------
+  { type: 'washer', name: 'Washing Machine', category: 'Appliances', w: 0.6, d: 0.62, h: 0.85, color: '#e8eaec', shape: 'washer' },
+  { type: 'dryer', name: 'Dryer', category: 'Appliances', w: 0.6, d: 0.62, h: 0.85, color: '#dfe2e5', shape: 'washer' },
+  { type: 'chest-freezer', name: 'Chest Freezer', category: 'Appliances', w: 1.0, d: 0.6, h: 0.85, color: '#e2e6ea', shape: 'appliance' },
+  { type: 'water-heater', name: 'Water Heater', category: 'Appliances', w: 0.55, d: 0.55, h: 1.5, color: '#d9dde1', shape: 'fridge' },
+  { type: 'ac-unit', name: 'AC Unit', category: 'Appliances', w: 0.5, d: 0.5, h: 0.7, color: '#cfd4da', shape: 'appliance' },
+
+  // ---------- Bathroom ----------
+  { type: 'toilet', name: 'Toilet', category: 'Bathroom', w: 0.4, d: 0.68, h: 0.78, color: '#f2f2f0', shape: 'toilet' },
+  { type: 'bathtub', name: 'Bathtub', category: 'Bathroom', w: 1.7, d: 0.75, h: 0.56, color: '#f3f3f1', shape: 'bathtub' },
+  { type: 'shower', name: 'Shower', category: 'Bathroom', w: 0.9, d: 0.9, h: 2.0, color: '#e8e8e6', shape: 'shower' },
+  { type: 'vanity', name: 'Vanity', category: 'Bathroom', w: 0.8, d: 0.5, h: 0.85, color: '#6f5a45', shape: 'sink' },
+
+  // ---------- Office ----------
+  { type: 'office-chair', name: 'Office Chair', category: 'Office', w: 0.6, d: 0.6, h: 1.1, color: '#3a3a40', shape: 'chair' },
+  { type: 'filing-cabinet', name: 'Filing Cabinet', category: 'Office', w: 0.45, d: 0.6, h: 1.32, color: '#6b6f74', shape: 'drawers' },
+  { type: 'office-desk', name: 'Office Desk', category: 'Office', w: 1.5, d: 0.75, h: 0.75, color: '#5d5a55', shape: 'desk' },
 ]
 
 export const CATALOG_BY_TYPE = Object.fromEntries(CATALOG.map((c) => [c.type, c]))

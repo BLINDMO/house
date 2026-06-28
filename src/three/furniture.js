@@ -307,6 +307,85 @@ const builders = {
       g.add(at(cyl(w * 0.11, w * 0.11, 0.01, mat('#333', 0.5)), w * fx, h + 0.02, d * fz))
     }
   },
+
+  // freestanding oven / stove with an oven door + window and a cooktop
+  oven(g, c) {
+    const { w, d, h, color } = c
+    const m = mat(color, 0.4, 0.45)
+    g.add(at(box(w, h, d, m), 0, h / 2, 0))
+    const door = mat('#26262a', 0.35, 0.3)
+    g.add(at(box(w - 0.06, h * 0.5, 0.02, door), 0, h * 0.38, d / 2 + 0.006))
+    const glass = new THREE.MeshStandardMaterial({ color: '#12161c', roughness: 0.2, emissive: new THREE.Color('#16242f'), emissiveIntensity: 0.25 })
+    g.add(at(new THREE.Mesh(new THREE.BoxGeometry(w - 0.2, h * 0.26, 0.01), glass), 0, h * 0.4, d / 2 + 0.016))
+    g.add(at(cyl(0.013, 0.013, w * 0.7, mat('#bcc0c4', 0.3, 0.7)), 0, h * 0.68, d / 2 + 0.02).rotateZ(Math.PI / 2))
+    const cooktop = mat('#1a1a1d', 0.3, 0.2)
+    g.add(at(box(w - 0.04, 0.02, d - 0.04, cooktop), 0, h + 0.01, 0))
+    for (const [fx, fz] of [[-0.22, -0.2], [0.22, -0.2], [-0.22, 0.22], [0.22, 0.22]]) {
+      g.add(at(cyl(w * 0.1, w * 0.1, 0.01, mat('#333', 0.5)), w * fx, h + 0.02, d * fz))
+    }
+    g.add(at(box(w, h * 0.16, 0.05, mat(shade(color, -0.12), 0.4)), 0, h + 0.09, -d / 2 + 0.03))
+  },
+
+  // generic front-panel appliance (dishwasher, etc.)
+  appliance(g, c) {
+    const { w, d, h, color } = c
+    const m = mat(color, 0.4, 0.45)
+    g.add(at(box(w, h, d, m), 0, h / 2, 0))
+    g.add(at(box(w - 0.06, h - 0.1, 0.02, mat(shade(color, -0.05), 0.35, 0.5)), 0, h / 2, d / 2 + 0.006))
+    g.add(at(cyl(0.012, 0.012, w * 0.62, mat('#8c9094', 0.3, 0.8)), 0, h - 0.08, d / 2 + 0.02).rotateZ(Math.PI / 2))
+    g.add(at(box(w - 0.08, 0.05, 0.02, mat(shade(color, -0.2), 0.4)), 0, h - 0.05, d / 2 + 0.01))
+  },
+
+  // front-load washer / dryer with a round glass door
+  washer(g, c) {
+    const { w, d, h, color } = c
+    const m = mat(color, 0.35, 0.5)
+    g.add(at(box(w, h, d, m), 0, h / 2, 0))
+    g.add(at(cyl(w * 0.33, w * 0.33, 0.04, mat('#9aa0a6', 0.3, 0.6)), 0, h * 0.46, d / 2 - 0.005).rotateX(Math.PI / 2))
+    const glass = new THREE.MeshStandardMaterial({ color: '#1f2e38', roughness: 0.12, metalness: 0.2, transparent: true, opacity: 0.7 })
+    g.add(at(cyl(w * 0.25, w * 0.25, 0.04, glass), 0, h * 0.46, d / 2 + 0.012).rotateX(Math.PI / 2))
+    g.add(at(box(w - 0.06, 0.08, 0.02, mat(shade(color, -0.18), 0.4)), 0, h - 0.08, d / 2 + 0.006))
+  },
+
+  // base cabinet with a sink basin + faucet (kitchen sink or bath vanity)
+  sink(g, c) {
+    const { w, d, h, color } = c
+    g.add(at(box(w, h - 0.05, d, mat(color, 0.55)), 0, (h - 0.05) / 2, 0))
+    g.add(at(box(w, 0.05, d, mat('#d8d2c8', 0.3, 0.2)), 0, h - 0.025, 0))
+    g.add(at(box(w * 0.6, 0.05, d * 0.58, mat('#9aa0a6', 0.25, 0.6)), 0, h - 0.05, 0.02))
+    const metalF = mat('#b8bcc0', 0.2, 0.8)
+    g.add(at(cyl(0.015, 0.015, 0.16, metalF), 0, h + 0.08, -d / 2 + 0.12))
+    g.add(at(box(0.02, 0.02, 0.13, metalF), 0, h + 0.15, -d / 2 + 0.18))
+  },
+
+  toilet(g, c) {
+    const { w, d, h, color } = c
+    const m = mat(color || '#f2f2f0', 0.35, 0.05)
+    g.add(at(cyl(w * 0.4, w * 0.34, h * 0.5, m), 0, h * 0.25, d * 0.16))
+    g.add(at(cyl(w * 0.46, w * 0.46, 0.05, m), 0, h * 0.52, d * 0.16))
+    g.add(at(box(w * 0.96, h * 0.5, d * 0.26, m), 0, h * 0.75, -d / 2 + d * 0.13))
+  },
+
+  bathtub(g, c) {
+    const { w, d, h, color } = c
+    g.add(at(box(w, h, d, mat(color || '#f3f3f1', 0.3, 0.05)), 0, h / 2, 0))
+    g.add(at(box(w - 0.16, h * 0.55, d - 0.16, mat('#e6eff4', 0.2, 0.1)), 0, h * 0.62, 0))
+    g.add(at(cyl(0.014, 0.014, 0.14, mat('#b8bcc0', 0.2, 0.8)), w / 2 - 0.12, h + 0.06, 0))
+  },
+
+  shower(g, c) {
+    const { w, d, h, color } = c
+    g.add(at(box(w, 0.08, d, mat(color || '#e8e8e6', 0.4, 0.05)), 0, 0.04, 0))
+    const glass = new THREE.MeshStandardMaterial({ color: '#cfe0e8', roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.26, side: THREE.DoubleSide })
+    const frame = mat('#9aa0a6', 0.3, 0.7)
+    const front = new THREE.Mesh(new THREE.PlaneGeometry(w, h - 0.08), glass)
+    front.position.set(0, h / 2, d / 2); front.castShadow = false; g.add(front)
+    const sidePane = new THREE.Mesh(new THREE.PlaneGeometry(d, h - 0.08), glass)
+    sidePane.rotation.y = Math.PI / 2; sidePane.position.set(w / 2, h / 2, 0); sidePane.castShadow = false; g.add(sidePane)
+    g.add(at(box(0.03, h, 0.03, frame), w / 2, h / 2, d / 2))
+    g.add(at(box(0.03, h, 0.03, frame), -w / 2, h / 2, d / 2))
+    g.add(at(cyl(w * 0.12, w * 0.12, 0.04, frame), -w * 0.1, h * 0.78, -d / 2 + 0.05))
+  },
 }
 
 export function buildItem(item) {
