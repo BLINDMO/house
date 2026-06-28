@@ -22,6 +22,7 @@ export const CATALOG = [
   { type: 'dining-chair', name: 'Chair', category: 'Seating', w: 0.5, d: 0.54, h: 0.9, color: '#caa472', shape: 'chair' },
   { type: 'bench', name: 'Bench', category: 'Seating', w: 1.2, d: 0.42, h: 0.46, color: '#a98c6a', shape: 'bench' },
   { type: 'stool', name: 'Stool', category: 'Seating', w: 0.42, d: 0.42, h: 0.62, color: '#8a7256', shape: 'round' },
+  { type: 'pouf', name: 'Pouf', category: 'Seating', w: 0.5, d: 0.5, h: 0.4, color: '#b6855f', shape: 'pouf' },
 
   // ---------- Tables ----------
   { type: 'coffee-table', name: 'Coffee Table', category: 'Tables', w: 1.1, d: 0.6, h: 0.42, color: '#7a5c41', shape: 'table' },
@@ -42,12 +43,19 @@ export const CATALOG = [
   { type: 'tv-unit', name: 'TV Unit', category: 'Storage', w: 1.7, d: 0.4, h: 0.48, color: '#3f4148', shape: 'drawers' },
   { type: 'tv', name: 'TV', category: 'Storage', w: 1.25, d: 0.08, h: 0.72, color: '#15171b', shape: 'tv' },
   { type: 'cabinet', name: 'Cabinet', category: 'Storage', w: 0.9, d: 0.45, h: 0.92, color: '#5f534a', shape: 'cabinet' },
+  { type: 'ladder-shelf', name: 'Ladder Shelf', category: 'Storage', w: 0.6, d: 0.4, h: 1.7, color: '#9a6f43', shape: 'ladder' },
 
   // ---------- Decor ----------
   { type: 'rug', name: 'Rug', category: 'Decor', w: 2.2, d: 1.5, h: 0.02, color: '#94604f', shape: 'rug' },
   { type: 'round-rug', name: 'Round Rug', category: 'Decor', w: 1.6, d: 1.6, h: 0.02, color: '#4f6b73', shape: 'round-rug' },
   { type: 'plant', name: 'Plant', category: 'Decor', w: 0.5, d: 0.5, h: 1.3, color: '#3f7a4f', shape: 'plant' },
   { type: 'floor-lamp', name: 'Floor Lamp', category: 'Decor', w: 0.4, d: 0.4, h: 1.6, color: '#e8d8a8', shape: 'lamp' },
+  { type: 'fireplace', name: 'Fireplace', category: 'Decor', w: 1.3, d: 0.4, h: 1.1, color: '#cfcabf', shape: 'fireplace' },
+  { type: 'floor-mirror', name: 'Floor Mirror', category: 'Decor', w: 0.7, d: 0.06, h: 1.7, color: '#caa86a', shape: 'mirror' },
+  { type: 'bar-cart', name: 'Bar Cart', category: 'Decor', w: 0.7, d: 0.42, h: 0.8, color: '#b8923f', shape: 'barcart' },
+  { type: 'piano', name: 'Upright Piano', category: 'Decor', w: 1.5, d: 0.6, h: 1.2, color: '#161616', shape: 'piano' },
+  { type: 'coat-rack', name: 'Coat Rack', category: 'Decor', w: 0.5, d: 0.5, h: 1.75, color: '#5a4636', shape: 'coatrack' },
+  { type: 'floor-vase', name: 'Floor Vase', category: 'Decor', w: 0.32, d: 0.32, h: 0.85, color: '#9a8f7a', shape: 'vase' },
 
   // ---------- Kitchen ----------
   { type: 'fridge', name: 'Fridge', category: 'Kitchen', w: 0.72, d: 0.7, h: 1.85, color: '#cfd4da', shape: 'fridge' },

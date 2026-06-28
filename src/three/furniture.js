@@ -386,6 +386,75 @@ const builders = {
     g.add(at(box(0.03, h, 0.03, frame), -w / 2, h / 2, d / 2))
     g.add(at(cyl(w * 0.12, w * 0.12, 0.04, frame), -w * 0.1, h * 0.78, -d / 2 + 0.05))
   },
+
+  fireplace(g, c) {
+    const { w, d, h, color } = c
+    const stone = mat(color || '#cfcabf', 0.7)
+    g.add(at(box(w, h, d, stone), 0, h / 2, 0))
+    g.add(at(box(w * 0.6, h * 0.5, 0.06, mat('#15120f', 0.6)), 0, h * 0.32, d / 2 + 0.005))
+    g.add(at(box(w + 0.12, 0.08, d + 0.1, mat(shade(color || '#cfcabf', -0.2), 0.6)), 0, h * 0.62, 0))
+    const fire = new THREE.PointLight('#ff7a30', 3, 3.5, 2); fire.position.set(0, h * 0.3, d / 2 - 0.1); g.add(fire)
+    g.add(at(box(w * 0.4, h * 0.18, 0.04, new THREE.MeshStandardMaterial({ color: '#ff7a30', emissive: new THREE.Color('#ff5a14'), emissiveIntensity: 1.4 })), 0, h * 0.2, d / 2 - 0.02))
+  },
+
+  mirror(g, c) {
+    const { w, h, color } = c
+    g.add(at(box(w, h, 0.05, mat(color || '#caa86a', 0.4, 0.3)), 0, h / 2, 0))
+    g.add(at(box(w - 0.1, h - 0.1, 0.01, mat('#cdd6dc', 0.05, 0.6)), 0, h / 2, 0.032))
+  },
+
+  barcart(g, c) {
+    const { w, d, h, color } = c
+    const m = mat(color || '#b8923f', 0.3, 0.7)
+    const top = mat('#d8d2c8', 0.2, 0.3)
+    for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+      g.add(at(cyl(0.012, 0.012, h, m), sx * (w / 2 - 0.04), h / 2, sz * (d / 2 - 0.04)))
+      g.add(at(cyl(0.03, 0.03, 0.02, mat('#222', 0.5)), sx * (w / 2 - 0.04), 0.03, sz * (d / 2 - 0.04)).rotateZ(Math.PI / 2))
+    }
+    g.add(at(box(w, 0.02, d, top), 0, h - 0.02, 0))
+    g.add(at(box(w, 0.02, d, top), 0, h * 0.45, 0))
+    for (let i = 0; i < 3; i++) g.add(at(cyl(0.03, 0.035, 0.18, mat(['#3a5a3a', '#5a2a2a', '#2a3a5a'][i], 0.3, 0.2)), -w / 5 + i * 0.12, h + 0.09, 0))
+  },
+
+  piano(g, c) {
+    const { w, d, h, color } = c
+    const body = mat(color || '#161616', 0.3, 0.2)
+    g.add(at(box(w, h, d, body), 0, h / 2, 0))
+    g.add(at(box(w * 0.9, 0.04, 0.16, mat('#f4f1ea', 0.3)), 0, h * 0.5, d / 2 + 0.04))
+    g.add(at(box(w * 0.92, 0.16, 0.06, body), 0, h * 0.58, d / 2 + 0.05))
+    g.add(at(box(w + 0.04, 0.05, d + 0.06, body), 0, h + 0.02, 0))
+    g.add(at(box(0.12, 0.02, 0.06, mat('#b8923f', 0.3, 0.7)), 0, 0.05, d / 2))
+  },
+
+  coatrack(g, c) {
+    const { w, h, color } = c
+    const m = mat(color || '#5a4636', 0.5)
+    g.add(at(cyl(0.02, 0.025, h, m), 0, h / 2, 0))
+    g.add(at(cyl(w * 0.4, w * 0.45, 0.03, m), 0, 0.02, 0))
+    for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; g.add(at(box(0.16, 0.025, 0.025, m), Math.cos(a) * 0.08, h - 0.12, Math.sin(a) * 0.08).rotateY(-a)) }
+  },
+
+  vase(g, c) {
+    const { w, h, color } = c
+    const v = mat(color || '#9a8f7a', 0.4, 0.1)
+    g.add(at(cyl(w * 0.28, w * 0.18, h * 0.72, v), 0, h * 0.36, 0))
+    g.add(at(cyl(w * 0.2, w * 0.28, h * 0.12, v), 0, h * 0.74, 0))
+    for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; g.add(at(cyl(0.006, 0.006, h * 0.5, mat('#4a6a3a', 0.7)), Math.cos(a) * 0.05, h * 0.82 + h * 0.22, Math.sin(a) * 0.05).rotateZ(Math.cos(a) * 0.25)) }
+  },
+
+  pouf(g, c) {
+    const { w, h, color } = c
+    g.add(at(cyl(w / 2, w * 0.45, h, mat(color || '#b6855f', 0.9)), 0, h / 2, 0))
+    g.add(at(cyl(w * 0.5, w * 0.45, 0.01, mat(shade(color || '#b6855f', -0.15), 0.9)), 0, h * 0.5, 0))
+  },
+
+  ladder(g, c) {
+    const { w, d, h, color } = c
+    const m = mat(color || '#9a6f43', 0.6)
+    g.add(at(box(0.04, h, 0.04, m), -w / 2 + 0.04, h / 2, 0))
+    g.add(at(box(0.04, h, 0.04, m), w / 2 - 0.04, h / 2, 0))
+    for (let i = 0; i < 4; i++) { const y = h * 0.22 * (i + 1); const dd = Math.max(0.12, d * (1 - i * 0.18)); g.add(at(box(w - 0.04, 0.03, dd, m), 0, y, d / 2 - dd / 2)) }
+  },
 }
 
 export function buildItem(item) {
