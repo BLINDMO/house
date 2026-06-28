@@ -1,7 +1,7 @@
 import React from 'react'
 import { useStore } from '../store.jsx'
 import {
-  IconCursor, IconSquare, IconWall, IconLayers, IconPlus, IconTune, IconSun, IconPen, IconDoor,
+  IconCursor, IconSquare, IconWall, IconPlus, IconTune, IconSun,
 } from './Icons.jsx'
 
 function RailBtn({ icon, label, active, accent, onClick }) {
@@ -15,7 +15,7 @@ function RailBtn({ icon, label, active, accent, onClick }) {
 
 export default function Rail({ onOpen, activePanel }) {
   const { state, dispatch } = useStore()
-  const { view, tool, sideTool, ambiance } = state
+  const { view, tool, ambiance } = state
 
   return (
     <aside className="rail">
@@ -25,21 +25,11 @@ export default function Rail({ onOpen, activePanel }) {
             <RailBtn icon={<IconCursor size={20} />} label="Select" active={tool === 'select'} onClick={() => dispatch({ type: 'tool', tool: 'select' })} />
             <RailBtn icon={<IconSquare size={20} />} label="Room" active={tool === 'room'} onClick={() => dispatch({ type: 'tool', tool: 'room' })} />
             <RailBtn icon={<IconWall size={20} />} label="Wall" active={tool === 'wall'} onClick={() => dispatch({ type: 'tool', tool: 'wall' })} />
-            <RailBtn icon={<IconPen size={20} />} label="Sketch" active={tool === 'sketch'} onClick={() => dispatch({ type: 'tool', tool: 'sketch' })} />
-          </>
-        )}
-        {view === 'side' && (
-          <>
-            <RailBtn icon={<IconCursor size={20} />} label="Select" active={sideTool === 'select'} onClick={() => dispatch({ type: 'sideTool', tool: 'select' })} />
-            <RailBtn icon={<IconSquare size={20} />} label="Box" active={sideTool === 'box'} onClick={() => dispatch({ type: 'sideTool', tool: 'box' })} />
-            <RailBtn icon={<IconWall size={20} />} label="Board" active={sideTool === 'board'} onClick={() => dispatch({ type: 'sideTool', tool: 'board' })} />
-            <RailBtn icon={<IconDoor size={20} />} label="Opening" active={sideTool === 'opening'} onClick={() => dispatch({ type: 'sideTool', tool: 'opening' })} />
-            <RailBtn icon={<IconLayers size={20} />} label="Presets" active={activePanel === 'presets'} onClick={() => onOpen('presets')} />
           </>
         )}
         {view === '3d' && (
           <>
-            {['day', 'dusk', 'night'].map((a) => (
+            {['day', 'night'].map((a) => (
               <RailBtn key={a} icon={<IconSun size={20} />} label={a[0].toUpperCase() + a.slice(1)} active={ambiance === a} onClick={() => dispatch({ type: 'ambiance', value: a })} />
             ))}
           </>

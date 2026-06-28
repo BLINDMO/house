@@ -17,10 +17,10 @@ import { buildItem, disposeGroup } from '../three/furniture.js'
 import { MATERIAL_BY_ID, matUrl, HDRI_URL } from '../data/materials.js'
 import { IconCenter } from './Icons.jsx'
 
+// Outdoor presets — an unseen sun over a green field. Daytime by default.
 const AMBIANCE = {
-  day: { bg: '#0e1014', exposure: 1.05, env: 1.0, key: ['#fff4e0', 2.0], fill: ['#cdddff', 0.5], hemi: 0.55, amb: 0.25 },
-  dusk: { bg: '#171009', exposure: 1.12, env: 0.5, key: ['#ffb877', 1.9], fill: ['#8a78d0', 0.45], hemi: 0.35, amb: 0.16 },
-  night: { bg: '#080a0f', exposure: 1.18, env: 0.18, key: ['#9fb6ff', 0.5], fill: ['#4a5fb0', 0.3], hemi: 0.14, amb: 0.08 },
+  day: { bg: '#bcd8f2', exposure: 1.05, env: 1.0, key: ['#fff6e8', 2.6], fill: ['#cfe2ff', 0.5], hemi: 0.7, amb: 0.3, ground: '#5f8f4e', skyHemi: '#cfe3ff', grndHemi: '#5a7a44' },
+  night: { bg: '#0a1222', exposure: 1.12, env: 0.22, key: ['#aac2ff', 0.6], fill: ['#485fb0', 0.3], hemi: 0.2, amb: 0.1, ground: '#22311f', skyHemi: '#33406a', grndHemi: '#1d2a18' },
 }
 const snap = (v, g) => Math.round(v / g) * g
 const clamp8 = (v) => Math.max(0, Math.min(255, Math.round(v)))
@@ -238,7 +238,7 @@ export default function Scene3D({ onOpenInspector }) {
     mount.appendChild(renderer.domElement)
 
     const scene = new THREE.Scene()
-    scene.background = new THREE.Color('#0e1014')
+    scene.background = new THREE.Color('#bcd8f2')
     const pmrem = new THREE.PMREMGenerator(renderer)
     try { scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture } catch { /* optional */ }
     // Upgrade to a real Poly Haven CC0 interior HDRI for image-based lighting
@@ -296,18 +296,15 @@ export default function Scene3D({ onOpenInspector }) {
       composer = null
     }
 
-    // ground + grid
+    // grassy ground field
     const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(160, 160),
-      new THREE.MeshStandardMaterial({ color: '#0c0d11', roughness: 1 })
+      new THREE.PlaneGeometry(400, 400),
+      new THREE.MeshStandardMaterial({ color: '#5f8f4e', roughness: 1 })
     )
     ground.rotation.x = -Math.PI / 2
     ground.position.y = -0.04
     ground.receiveShadow = true
     scene.add(ground)
-    const grid = new THREE.GridHelper(160, 160, 0x2c323c, 0x191d23)
-    grid.position.y = -0.02
-    scene.add(grid)
 
     const roomGroup = new THREE.Group()
     const furnitureGroup = new THREE.Group()
@@ -343,7 +340,7 @@ export default function Scene3D({ onOpenInspector }) {
     scene.add(gizmo)
 
     Object.assign(refs.current, {
-      renderer, scene, camera, controls, roomGroup, furnitureGroup,
+      renderer, scene, camera, controls, roomGroup, furnitureGroup, ground,
       key, fill, ambient, hemi, pmrem, ring, gizmo, builtinGroup, composer, gtao,
       woodCache: new Map(), imgCache: new Map(), roomTexList: [], walls: [], itemMap: new Map(), framed: false,
       raycaster: new THREE.Raycaster(), drag: null, rotate: null, pending: null,
@@ -503,7 +500,10 @@ export default function Scene3D({ onOpenInspector }) {
     r.key.color.set(a.key[0]); r.key.intensity = a.key[1]
     r.fill.color.set(a.fill[0]); r.fill.intensity = a.fill[1]
     r.hemi.intensity = a.hemi
+    if (a.skyHemi) r.hemi.color.set(a.skyHemi)
+    if (a.grndHemi) r.hemi.groundColor.set(a.grndHemi)
     r.ambient.intensity = a.amb
+    if (r.ground && a.ground) r.ground.material.color.set(a.ground)
   }, [ambiance])
 
   // ---- rooms + walls shell ----

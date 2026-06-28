@@ -2,11 +2,10 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { useStore } from '../store.jsx'
 import { haptic } from '../util.js'
 import Editor2D from './Editor2D.jsx'
-import ElevationEditor from './ElevationEditor.jsx'
 import Scene3D from './Scene3D.jsx'
 import Rail from './Rail.jsx'
 import Panel from './Panel.jsx'
-import { IconPlan, IconCube, IconSide, IconUndo, IconRedo, IconShare, IconNew } from './Icons.jsx'
+import { IconPlan, IconCube, IconUndo, IconRedo, IconShare, IconNew } from './Icons.jsx'
 
 export default function App() {
   const { state, dispatch, canUndo, canRedo } = useStore()
@@ -85,7 +84,6 @@ export default function App() {
 
         <div className="seg" role="tablist" aria-label="View mode">
           <button className={view === '2d' ? 'active' : ''} onClick={() => setView('2d')} aria-pressed={view === '2d'}><IconPlan size={15} /> Plan</button>
-          <button className={view === 'side' ? 'active' : ''} onClick={() => setView('side')} aria-pressed={view === 'side'}><IconSide size={15} /> Side</button>
           <button className={view === '3d' ? 'active' : ''} onClick={() => setView('3d')} aria-pressed={view === '3d'}><IconCube size={15} /> 3D</button>
         </div>
 
@@ -101,7 +99,7 @@ export default function App() {
         <Rail onOpen={openPanel} activePanel={panel} />
 
         <main className="stage">
-          {view === '2d' ? <Editor2D /> : view === 'side' ? <ElevationEditor /> : <Scene3D onOpenInspector={() => setOverride('inspector')} />}
+          {view === '2d' ? <Editor2D /> : <Scene3D onOpenInspector={() => setOverride('inspector')} />}
         </main>
 
         {panel && <div className="panel-scrim" onClick={closePanel} />}

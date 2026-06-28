@@ -8,10 +8,8 @@ const uid = () => `${Date.now().toString(36)}-${(seq++).toString(36)}`
 
 function starter() {
   return {
-    view: '2d',
-    tool: 'select', // 'select' | 'room' | 'wall' | 'sketch'
-    sideTool: 'select', // 'select' | 'box' | 'board'
-    sideWall: null, // wall ref { kind, uid, side } for the Side view
+    view: '2d', // '2d' | '3d'
+    tool: 'select', // 'select' | 'room' | 'wall'
     units: 'ft',
     ambiance: 'day',
     defaultHeight: 2.7,
@@ -34,7 +32,9 @@ function load() {
     if (!raw) return starter()
     const data = JSON.parse(raw)
     if (!data || !Array.isArray(data.items)) return starter()
-    return { ...starter(), ...data, tool: 'select', sideTool: 'select', selected: null }
+    const view = data.view === '3d' ? '3d' : '2d' // Side view was removed
+    const ambiance = data.ambiance === 'night' ? 'night' : 'day' // Dusk was removed
+    return { ...starter(), ...data, view, ambiance, tool: 'select', selected: null }
   } catch {
     return starter()
   }
@@ -107,10 +107,6 @@ function reducer(state, action) {
       return { ...state, units: action.value }
     case 'tool':
       return { ...state, tool: action.tool, selected: action.tool === 'select' ? state.selected : null }
-    case 'sideTool':
-      return { ...state, sideTool: action.tool, selected: action.tool === 'select' ? state.selected : null }
-    case 'sideWall':
-      return { ...state, sideWall: action.ref }
     case 'defaultHeight':
       return { ...state, defaultHeight: clamp(action.value, 1.5, 6) }
 
