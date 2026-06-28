@@ -1,18 +1,22 @@
 import React, { useMemo, useState } from 'react'
-import { CATALOG, CATEGORIES } from '../data/catalog.js'
-import { useStore } from '../store.jsx'
-import { formatLen } from '../util.js'
+import { CATALOG } from '../data/catalog.js'
+import { PH_MODELS, phThumb } from '../data/phModels.js'
 import Footprint from './Footprint.jsx'
 
-function Thumb({ item }) {
-  const box = { w: 86, h: 60 }
+// Unified library: real Poly Haven models (with photo thumbnails) first, then
+// the built-in procedural pieces. Grouped by category with search.
+const LIBRARY = [
+  ...PH_MODELS.map((m) => ({ key: `ph:${m.id}`, type: `ph:${m.id}`, name: m.name, category: m.category, thumb: phThumb(m.id), real: true })),
+  ...CATALOG.map((c) => ({ key: c.type, type: c.type, name: c.name, category: c.category, proc: c })),
+]
+const CAT_ORDER = ['Seating', 'Tables', 'Bedroom', 'Storage', 'Appliances', 'Lighting', 'Electronics', 'Decor', 'Kitchen']
+const CATS = ['All', ...CAT_ORDER.filter((c) => LIBRARY.some((i) => i.category === c))]
+
+function ProcThumb({ item }) {
   const ar = item.w / item.d
-  let wpx = box.w
+  let wpx = 86
   let dpx = wpx / ar
-  if (dpx > box.h) {
-    dpx = box.h
-    wpx = dpx * ar
-  }
+  if (dpx > 60) { dpx = 60; wpx = dpx * ar }
   return (
     <svg viewBox="-50 -36 100 72" preserveAspectRatio="xMidYMid meet">
       <Footprint item={item} wpx={wpx} dpx={dpx} />
@@ -21,40 +25,47 @@ function Thumb({ item }) {
 }
 
 export default function Catalog({ onPick }) {
-  const { state } = useStore()
-  const { units } = state
   const [cat, setCat] = useState('All')
-  const cats = ['All', ...CATEGORIES]
-  const list = useMemo(
-    () => (cat === 'All' ? CATALOG : CATALOG.filter((c) => c.category === cat)),
-    [cat]
-  )
+  const [q, setQ] = useState('')
+  const list = useMemo(() => {
+    const query = q.trim().toLowerCase()
+    return LIBRARY.filter((i) =>
+      (cat === 'All' || i.category === cat) &&
+      (!query || i.name.toLowerCase().includes(query))
+    )
+  }, [cat, q])
 
   return (
     <>
       <div className="sheet-head">
         <div>
-          <h2>Furniture</h2>
-          <div className="sub">{CATALOG.length} premium pieces · tap to place</div>
+          <h2>Library</h2>
+          <div className="sub">{LIBRARY.length} pieces · {PH_MODELS.length} photoreal · tap to place</div>
         </div>
       </div>
 
+      <div className="lib-search">
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search furniture, appliances…" aria-label="Search library" />
+      </div>
+
       <div className="cats">
-        {cats.map((c) => (
-          <button key={c} className={`chip ${cat === c ? 'active' : ''}`} onClick={() => setCat(c)}>
-            {c}
-          </button>
+        {CATS.map((c) => (
+          <button key={c} className={`chip ${cat === c ? 'active' : ''}`} onClick={() => setCat(c)}>{c}</button>
         ))}
       </div>
 
-      <div className="grid">
+      <div className="lib-grid">
         {list.map((item) => (
-          <button key={item.type} className="card" onClick={() => onPick(item.type)}>
-            <div className="thumb"><Thumb item={item} /></div>
-            <div className="name">{item.name}</div>
-            <div className="dim">{formatLen(item.w, units)} × {formatLen(item.d, units)}</div>
+          <button key={item.key} className="lib-card" onClick={() => onPick(item.type)} title={item.name}>
+            <div className="lib-thumb">
+              {item.real
+                ? <img src={item.thumb} loading="lazy" alt={item.name} draggable="false" />
+                : <ProcThumb item={item.proc} />}
+            </div>
+            <div className="lib-name">{item.name}</div>
           </button>
         ))}
+        {list.length === 0 && <div className="panel-empty">No matches for “{q}”.</div>}
       </div>
     </>
   )

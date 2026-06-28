@@ -26,8 +26,20 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,jpg,hdr,woff2}'],
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024
+        globPatterns: ['**/*.{js,css,html,svg,png,jpg,webp,hdr,woff2}'],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        runtimeCaching: [
+          {
+            // Lazy-loaded Poly Haven CC0 models — cache on first use for offline.
+            urlPattern: ({ url }) => url.hostname === 'dl.polyhaven.org' || url.hostname === 'cdn.polyhaven.com',
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'polyhaven-models',
+              expiration: { maxEntries: 600, maxAgeSeconds: 60 * 60 * 24 * 60 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          }
+        ]
       }
     })
   ]

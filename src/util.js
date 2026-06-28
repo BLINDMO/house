@@ -27,10 +27,13 @@ export function formatArea(m2, units) {
   return units === 'm' ? `${m2.toFixed(1)} m²` : `${Math.round(m2 * 10.7639)} ft²`
 }
 
-// Effective (scaled) dimensions of a placed item, in metres.
+// Effective (scaled) dimensions of a placed item, in metres. Real Poly Haven
+// models store their measured size on `item.dim` (set on first 3D load); that
+// takes precedence over the catalog/placeholder def.
 export function effDims(c, item) {
   const s = (item && item.scale) || {}
-  return { w: c.w * (s.x ?? 1), d: c.d * (s.z ?? 1), h: c.h * (s.y ?? 1) }
+  const b = (item && item.dim) || c || { w: 0.5, d: 0.5, h: 0.5 }
+  return { w: b.w * (s.x ?? 1), d: b.d * (s.z ?? 1), h: b.h * (s.y ?? 1) }
 }
 
 // Light haptic feedback where supported (no-op elsewhere).

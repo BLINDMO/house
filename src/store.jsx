@@ -137,6 +137,10 @@ function reducer(state, action) {
     }
 
     case 'addItem': {
+      if (action.kind.startsWith?.('ph:')) {
+        const item = { uid: uid(), type: action.kind, x: action.x ?? 0, z: action.z ?? 0, rot: 0, scale: { x: 1, y: 1, z: 1 } }
+        return { ...state, items: [...state.items, item], selected: { type: 'item', uid: item.uid } }
+      }
       const c = CATALOG_BY_TYPE[action.kind]
       if (!c) return state
       const item = {
@@ -146,6 +150,10 @@ function reducer(state, action) {
       }
       return { ...state, items: [...state.items, item], selected: { type: 'item', uid: item.uid } }
     }
+
+    // non-historic: record a model's measured real-world size once it loads
+    case 'itemDim':
+      return { ...state, items: state.items.map((o) => (o.uid === action.uid ? { ...o, dim: action.dim } : o)) }
 
     case 'update':
       return patchOne(state, action.sel.type, action.sel.uid, action.patch)

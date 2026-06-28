@@ -10,7 +10,9 @@ import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js'
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js'
 import { useStore } from '../store.jsx'
 import { useAssets } from '../assets.jsx'
-import { CATALOG_BY_TYPE } from '../data/catalog.js'
+import { defFor } from '../data/catalog.js'
+import { isModelType, phId } from '../data/phModels.js'
+import { loadModel, instanceModel } from '../three/modelLoader.js'
 import { haptic, effDims } from '../util.js'
 import { wallGeometry } from '../wall.js'
 import { buildItem, disposeGroup } from '../three/furniture.js'
@@ -378,7 +380,7 @@ export default function Scene3D({ onOpenInspector }) {
         const { items: its2, selected: sel2 } = live.current
         const it = sel2?.type === 'item' ? its2.find((i) => i.uid === sel2.uid) : null
         if (it && !refs.current.drag && !refs.current.rotate) {
-          const c = CATALOG_BY_TYPE[it.type]
+          const c = defFor(it.type)
           const dd = effDims(c, it)
           const v = new THREE.Vector3(it.x, dd.h + 0.35, it.z).project(camera)
           const rect = renderer.domElement
@@ -496,16 +498,36 @@ export default function Scene3D({ onOpenInspector }) {
     const r = refs.current
     if (!r.furnitureGroup) return
     const map = r.itemMap
+    // Model instances share cached geometry/materials with the prototype, so we
+    // must NOT dispose them (that would corrupt the cache) — only procedural
+    // builds own unique resources.
+    const removeEntry = (entry) => { r.furnitureGroup.remove(entry.group); if (!entry.model) disposeGroup(entry.group) }
     const seen = new Set()
     for (const it of items) {
       seen.add(it.uid)
+      const model = isModelType(it.type)
       let entry = map.get(it.uid)
-      if (!entry || entry.type !== it.type || entry.color !== it.color) {
-        if (entry) { r.furnitureGroup.remove(entry.group); disposeGroup(entry.group) }
-        const group = buildItem(it)
-        r.furnitureGroup.add(group)
-        entry = { group, type: it.type, color: it.color }
-        map.set(it.uid, entry)
+      if (!entry || entry.type !== it.type || (!model && entry.color !== it.color)) {
+        if (entry) removeEntry(entry)
+        if (model) {
+          const group = new THREE.Group()
+          r.furnitureGroup.add(group)
+          entry = { group, type: it.type, model: true, loaded: false }
+          map.set(it.uid, entry)
+          loadModel(phId(it.type)).then((res) => {
+            const cur = map.get(it.uid)
+            if (!cur || cur.type !== it.type || cur.loaded) return
+            cur.group.add(instanceModel(res))
+            cur.loaded = true
+            const liveIt = live.current.items.find((i) => i.uid === it.uid)
+            if (liveIt && !liveIt.dim) live.current.dispatch({ type: 'itemDim', uid: it.uid, dim: res.dim })
+          }).catch(() => { /* offline / load failed */ })
+        } else {
+          const group = buildItem(it)
+          r.furnitureGroup.add(group)
+          entry = { group, type: it.type, color: it.color }
+          map.set(it.uid, entry)
+        }
       }
       entry.group.position.set(it.x, 0, it.z)
       entry.group.rotation.y = -((it.rot || 0) * Math.PI) / 180
@@ -513,12 +535,12 @@ export default function Scene3D({ onOpenInspector }) {
       entry.group.scale.set(s.x ?? 1, s.y ?? 1, s.z ?? 1)
     }
     for (const [id, entry] of map) {
-      if (!seen.has(id)) { r.furnitureGroup.remove(entry.group); disposeGroup(entry.group); map.delete(id) }
+      if (!seen.has(id)) { removeEntry(entry); map.delete(id) }
     }
 
     const sel = selected?.type === 'item' ? items.find((i) => i.uid === selected.uid) : null
     if (sel) {
-      const c = CATALOG_BY_TYPE[sel.type]
+      const c = defFor(sel.type)
       const dd = effDims(c, sel)
       const radius = (Math.max(dd.w, dd.d) / 2) * 1.18 + 0.12
       r.ring.scale.setScalar(radius / 0.5); r.ring.position.set(sel.x, 0.03, sel.z); r.ring.visible = true

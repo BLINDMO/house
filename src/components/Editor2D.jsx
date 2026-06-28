@@ -1,6 +1,6 @@
 import React, { useLayoutEffect, useRef, useState } from 'react'
 import { useStore, footHalf } from '../store.jsx'
-import { CATALOG_BY_TYPE } from '../data/catalog.js'
+import { defFor } from '../data/catalog.js'
 import { effDims, formatLen, haptic } from '../util.js'
 import Footprint from './Footprint.jsx'
 import { IconCenter, IconCheck, IconClose, IconUndo } from './Icons.jsx'
@@ -99,7 +99,7 @@ export default function Editor2D() {
     const acc = (x, z) => { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z) }
     for (const r of rooms) { acc(r.x, r.z); acc(r.x + r.w, r.z + r.d) }
     for (const w of walls) { acc(w.x1, w.z1); acc(w.x2, w.z2) }
-    for (const it of items) { const c = CATALOG_BY_TYPE[it.type]; const d = effDims(c, it); acc(it.x - d.w / 2, it.z - d.d / 2); acc(it.x + d.w / 2, it.z + d.d / 2) }
+    for (const it of items) { const c = defFor(it.type); const d = effDims(c, it); acc(it.x - d.w / 2, it.z - d.d / 2); acc(it.x + d.w / 2, it.z + d.d / 2) }
     for (const s of sketches) for (const p of s.pts) acc(p.x, p.z)
     if (!isFinite(minX)) { setXf({ scale: 64, panX: W / 2, panY: H / 2, init: true }); return }
     const padX = 56
@@ -148,7 +148,7 @@ export default function Editor2D() {
   const selSketch = selected?.type === 'sketch' ? sketches.find((s) => s.uid === selected.uid) : null
 
   function itemCorners(it) {
-    const c = CATALOG_BY_TYPE[it.type]
+    const c = defFor(it.type)
     const d = effDims(c, it)
     const [cxp, cyp] = toScreen(it.x, it.z)
     const th = ((it.rot || 0) * Math.PI) / 180
@@ -187,7 +187,7 @@ export default function Editor2D() {
     }
     for (let i = items.length - 1; i >= 0; i--) {
       const it = items[i]
-      const c = CATALOG_BY_TYPE[it.type]
+      const c = defFor(it.type)
       if (!c) continue
       const d = effDims(c, it)
       const th = ((it.rot || 0) * Math.PI) / 180
@@ -288,7 +288,7 @@ export default function Editor2D() {
     const h = hitTest(px, py)
     switch (h.kind) {
       case 'item-handle':
-        setGesture({ kind: 'resizeItem', uid: selItem.uid, cxw: selItem.x, czw: selItem.z, rot: selItem.rot || 0, c: CATALOG_BY_TYPE[selItem.type] })
+        setGesture({ kind: 'resizeItem', uid: selItem.uid, cxw: selItem.x, czw: selItem.z, rot: selItem.rot || 0, c: selItem.dim || defFor(selItem.type) })
         break
       case 'room-handle':
         setGesture({ kind: 'resizeRoom', uid: selRoom.uid, handle: h.handle, x0: selRoom.x, z0: selRoom.z, w0: selRoom.w, d0: selRoom.d })
@@ -658,7 +658,7 @@ export default function Editor2D() {
 
         {/* items */}
         {items.map((it) => {
-          const c = CATALOG_BY_TYPE[it.type]
+          const c = defFor(it.type)
           if (!c) return null
           const [ix, iy] = toScreen(it.x, it.z)
           const d = effDims(c, it)
@@ -705,7 +705,7 @@ export default function Editor2D() {
         {/* selected item: corner resize handles + size badge */}
         {selItem && (() => {
           const cs = itemCorners(selItem)
-          const c = CATALOG_BY_TYPE[selItem.type]
+          const c = defFor(selItem.type)
           const d = effDims(c, selItem)
           const [ix, iy] = toScreen(selItem.x, selItem.z)
           const radius = Math.hypot(d.w * scale, d.d * scale) / 2
