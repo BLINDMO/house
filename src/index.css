@@ -1279,17 +1279,21 @@ input[type='range']::-moz-range-thumb {
 }
 .preset-card:active { transform: scale(0.98); border-color: var(--accent-line); background: var(--surface-hi); }
 
-/* ---------- rotate gate (portrait) ---------- */
+/* ---------- rotate gate (lock to landscape on phones) ---------- */
 .rotate-gate {
+  display: none;
   position: fixed;
   inset: 0;
   z-index: 9999;
-  display: grid;
   place-items: center;
   padding: 32px;
   background:
     radial-gradient(700px 500px at 50% 30%, rgba(217, 183, 121, 0.12), transparent 60%),
     var(--bg);
+}
+/* Only block touch devices in portrait — desktop narrow windows are fine. */
+@media (orientation: portrait) and (pointer: coarse) {
+  .rotate-gate { display: grid; }
 }
 .rotate-card {
   text-align: center;
