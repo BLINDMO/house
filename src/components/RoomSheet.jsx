@@ -5,7 +5,7 @@ import { formatLen } from '../util.js'
 
 export default function SettingsSheet({ onFlash, onClose }) {
   const { state, dispatch } = useStore()
-  const { units, defaultHeight, rooms, walls, items } = state
+  const { units, quality, defaultHeight, rooms, walls, items } = state
   const { assets, addAsset, removeAsset } = useAssets()
   const fileRef = useRef(null)
   const onUpload = async (e) => {
@@ -33,6 +33,22 @@ export default function SettingsSheet({ onFlash, onClose }) {
                 style={units === u ? activeChip : undefined}
                 onClick={() => dispatch({ type: 'units', value: u })}>{n}</button>
             ))}
+          </div>
+        </div>
+
+        <div className="row">
+          <div className="label">Graphics</div>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            {[['normal', 'Normal'], ['high', 'High'], ['max', 'Max']].map(([q, n]) => (
+              <button key={q} className="chip"
+                style={(quality || 'high') === q ? activeChip : undefined}
+                onClick={() => dispatch({ type: 'quality', value: q })}>{n}</button>
+            ))}
+          </div>
+        </div>
+        <div className="row" style={{ borderBottom: 'none', paddingTop: 0 }}>
+          <div className="sub" style={{ color: 'var(--text-3)', fontSize: 12 }}>
+            Lower this if 3D feels slow on your device. Normal turns off shadows &amp; effects; Max adds ambient occlusion.
           </div>
         </div>
 

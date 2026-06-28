@@ -125,7 +125,7 @@ function woodTexture(baseHex = '#b08a5e') {
 
 export default function Scene3D({ onOpenInspector }) {
   const { state, dispatch } = useStore()
-  const { rooms, walls, items, builtins, openings, selected, ambiance } = state
+  const { rooms, walls, items, builtins, openings, selected, ambiance, quality } = state
   const { map: assetMap } = useAssets()
   const mountRef = useRef(null)
   const menuRef = useRef(null)
@@ -457,7 +457,8 @@ export default function Scene3D({ onOpenInspector }) {
           } else btn.style.display = 'none'
         } else btn.style.display = 'none'
       }
-      if (composer) composer.render()
+      // Post-processing (AO/AA) only runs at the 'max' quality tier.
+      if (composer && refs.current.useComposer) composer.render()
       else renderer.render(scene, camera)
       raf = requestAnimationFrame(tick)
     }
@@ -505,6 +506,25 @@ export default function Scene3D({ onOpenInspector }) {
     r.ambient.intensity = a.amb
     if (r.ground && a.ground) r.ground.material.color.set(a.ground)
   }, [ambiance])
+
+  // ---- graphics quality (perf vs fidelity) ----
+  useEffect(() => {
+    const r = refs.current
+    if (!r.renderer) return
+    const q = quality || 'high'
+    const dpr = window.devicePixelRatio || 1
+    // pixel ratio: lighter on phones at lower tiers
+    const pr = q === 'normal' ? Math.min(dpr, 1.25) : q === 'high' ? Math.min(dpr, 1.5) : Math.min(dpr, 2)
+    r.renderer.setPixelRatio(pr)
+    r.composer?.setPixelRatio(pr)
+    // shadows off at 'normal'; ambient-occlusion / post-fx only at 'max'
+    const shadows = q !== 'normal'
+    r.renderer.shadowMap.enabled = shadows
+    r.key.castShadow = shadows
+    if (r.gtao) r.gtao.enabled = q === 'max'
+    r.useComposer = q === 'max'
+    r.renderer.shadowMap.needsUpdate = true
+  }, [quality])
 
   // ---- rooms + walls shell ----
   useEffect(() => {

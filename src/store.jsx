@@ -12,6 +12,7 @@ function starter() {
     tool: 'select', // 'select' | 'room' | 'wall'
     units: 'ft',
     ambiance: 'day',
+    quality: 'high', // 'normal' | 'high' | 'max' — render quality vs performance
     defaultHeight: 2.7,
     rooms: [],
     walls: [],
@@ -103,6 +104,8 @@ function reducer(state, action) {
       return { ...state, view: action.view }
     case 'ambiance':
       return { ...state, ambiance: action.value }
+    case 'quality':
+      return { ...state, quality: action.value }
     case 'units':
       return { ...state, units: action.value }
     case 'tool':
