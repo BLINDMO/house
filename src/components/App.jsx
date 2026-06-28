@@ -115,7 +115,7 @@ export default function App() {
         <Rail onOpen={openPanel} activePanel={panel} />
 
         <main className="stage">
-          {view === '2d' ? <Editor2D /> : <Scene3D onOpenInspector={() => setOverride('inspector')} />}
+          {view === '2d' ? <Editor2D /> : <Scene3D onOpenInspector={() => setOverride('inspector')} onFlash={flash} />}
         </main>
 
         {panel && panel !== 'inspector' && <div className="panel-scrim" onClick={closePanel} />}

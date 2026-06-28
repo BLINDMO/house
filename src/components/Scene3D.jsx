@@ -149,7 +149,7 @@ function woodTexture(baseHex = '#b08a5e') {
   return tex
 }
 
-export default function Scene3D({ onOpenInspector }) {
+export default function Scene3D({ onOpenInspector, onFlash }) {
   const { state, dispatch } = useStore()
   const { rooms, walls, items, builtins, openings, selected, ambiance, quality, visitMode } = state
   const { map: assetMap } = useAssets()
@@ -618,7 +618,28 @@ export default function Scene3D({ onOpenInspector }) {
         _right.crossVectors(_fwd, _up).normalize()
         const mz = fp.move.f - fp.move.b
         const mx = fp.move.r - fp.move.l
-        if (mz || mx) camera.position.addScaledVector(_fwd, mz * 0.055).addScaledVector(_right, mx * 0.055)
+        if (mz || mx) {
+          let px = camera.position.x + (_fwd.x * mz + _right.x * mx) * 0.055
+          let pz = camera.position.z + (_fwd.z * mz + _right.z * mx) * 0.055
+          // wall collision: stay clear of solid walls, pass through gaps (openings)
+          const R = 0.28
+          for (const col of (r.colliders || [])) {
+            const u = (px - col.ox) * col.dx + (pz - col.oz) * col.dz
+            const uc = Math.max(0, Math.min(col.len, u))
+            const cpx = col.ox + col.dx * uc, cpz = col.oz + col.dz * uc
+            const ddx = px - cpx, ddz = pz - cpz
+            const dist = Math.hypot(ddx, ddz)
+            if (dist < R) {
+              let inGap = false
+              for (const [a, b] of col.gaps) { if (uc > a + 0.05 && uc < b - 0.05) { inGap = true; break } }
+              if (!inGap) {
+                if (dist > 1e-4) { px += (ddx / dist) * (R - dist); pz += (ddz / dist) * (R - dist) }
+                else { px += col.nx * R; pz += col.nz * R }
+              }
+            }
+          }
+          camera.position.x = px; camera.position.z = pz
+        }
         camera.position.y = 1.6
       } else {
         controls.update()
@@ -728,19 +749,63 @@ export default function Scene3D({ onOpenInspector }) {
     const r = refs.current
     if (!r.camera) return
     r.visit = visitMode
-    if (visitMode) {
-      r.controls.enabled = false
-      const { rooms: rs } = live.current
-      let cx = 0, cz = 0
-      if (rs.length) { const rm = rs[0]; cx = rm.x + rm.w / 2; cz = rm.z + rm.d / 2 }
-      r.camera.position.set(cx, 1.6, cz)
-      r.fp.yaw = 0; r.fp.pitch = 0
-      r.fp.move = { f: 0, b: 0, l: 0, r: 0 }
-      r.fp.look = null
-    } else {
+    if (!visitMode) {
       r.controls.enabled = true
+      r.colliders = []
       reframe()
+      return
     }
+    r.controls.enabled = false
+
+    // house bounds
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
+    const acc = (x, z) => { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z) }
+    for (const rm of rooms) { acc(rm.x, rm.z); acc(rm.x + rm.w, rm.z + rm.d) }
+    for (const wl of walls) { acc(wl.x1, wl.z1); acc(wl.x2, wl.z2) }
+    if (!isFinite(minX)) { minX = -2; maxX = 2; minZ = -2; maxZ = 2 }
+    const cx = (minX + maxX) / 2
+
+    // build wall colliders + find a floor-level entrance (doorway / open side)
+    const colliders = []
+    let entrance = null
+    const addCollider = (ref) => {
+      const g = wallGeometry(ref, rooms, walls)
+      if (!g) return
+      const mine = openings.filter((o) => refEq(o.wall, ref))
+      const gaps = mine.filter((o) => o.v <= 0.25 && o.w > 0.5).map((o) => [Math.max(0, o.u), Math.min(g.length, o.u + o.w)])
+      colliders.push({ ox: g.ox, oz: g.oz, dx: g.dirx, dz: g.dirz, len: g.length, nx: g.nx, nz: g.nz, gaps })
+      for (const o of mine) {
+        if (!entrance && (o.kind === 'doorway' || (o.v <= 0.25 && o.w > 0.6))) {
+          const um = o.u + o.w / 2
+          entrance = { x: g.ox + g.dirx * um, z: g.oz + g.dirz * um, nx: g.nx, nz: g.nz }
+        }
+      }
+    }
+    for (const rm of rooms) for (const side of ['n', 'e', 's', 'w']) {
+      const ref = { kind: 'room', uid: rm.uid, side }
+      if (rm.wallsOn && rm.wallsOn[side] === false) {
+        if (!entrance) { const g = wallGeometry(ref, rooms, walls); if (g) entrance = { x: g.ox + g.dirx * g.length / 2, z: g.oz + g.dirz * g.length / 2, nx: g.nx, nz: g.nz } }
+        continue
+      }
+      addCollider(ref)
+    }
+    for (const wl of walls) addCollider({ kind: 'wall', uid: wl.uid })
+    r.colliders = colliders
+
+    // spawn outside, facing the entrance (or the front of the house)
+    let sx, sz, yaw
+    if (entrance) {
+      sx = entrance.x - entrance.nx * 3.0
+      sz = entrance.z - entrance.nz * 3.0
+      yaw = Math.atan2(-entrance.nx, -entrance.nz)
+    } else {
+      sx = cx; sz = maxZ + 3.5; yaw = 0
+      if (rooms.length) onFlash?.('No doorway — add a door or open a wall to walk inside')
+    }
+    r.camera.position.set(sx, 1.6, sz)
+    r.fp.yaw = yaw; r.fp.pitch = 0
+    r.fp.move = { f: 0, b: 0, l: 0, r: 0 }
+    r.fp.look = null
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visitMode])
 
