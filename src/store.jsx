@@ -60,6 +60,7 @@ function clampRoom(n) {
   n.w = clamp(n.w, 0.5, 40)
   n.d = clamp(n.d, 0.5, 40)
   if (n.height != null) n.height = clamp(n.height, 1.5, 6)
+  if (n.floorScale != null) n.floorScale = clamp(n.floorScale, 0.3, 4)
   return n
 }
 function clampWall(n) {
@@ -140,6 +141,10 @@ function reducer(state, action) {
       return { ...state, walls: [...state.walls, wall], selected: null }
     }
 
+    // Apply one floor finish to every room at once (item: whole-house flooring).
+    case 'floorAll':
+      return { ...state, rooms: state.rooms.map((r) => ({ ...r, ...action.patch })) }
+
     case 'addBuiltin': {
       const b = clampBuiltin({ uid: uid(), kind: 'cubby', depth: 0.4, color: '#c7ad84', ...action.builtin })
       return { ...state, builtins: [...state.builtins, b], selected: { type: 'builtin', uid: b.uid } }
@@ -208,7 +213,7 @@ function reducer(state, action) {
 }
 
 // ---- history wrapper (undo / redo with drag coalescing) ----
-const HISTORIC = new Set(['addRoom', 'addWall', 'addSketch', 'addItem', 'addBuiltin', 'addBuiltins', 'addOpening', 'update', 'remove', 'duplicate', 'clear', 'reset', 'defaultHeight'])
+const HISTORIC = new Set(['addRoom', 'addWall', 'addSketch', 'addItem', 'addBuiltin', 'addBuiltins', 'addOpening', 'floorAll', 'update', 'remove', 'duplicate', 'clear', 'reset', 'defaultHeight'])
 const LIMIT = 80
 
 function root(c, action) {

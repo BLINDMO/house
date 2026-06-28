@@ -912,16 +912,33 @@ input[type='range']::-moz-range-thumb {
   flex-wrap: wrap;
 }
 .swatch {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   border-radius: 9px;
   border: 2px solid transparent;
   box-shadow: var(--shadow-1), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+/* Texture swatches need to be large enough to actually read the material. */
+.swatch.img,
+.swatch.wood {
+  width: 52px;
+  height: 52px;
+  border-radius: 11px;
 }
 .swatch.active {
   border-color: #fff;
   transform: scale(1.08);
 }
+
+/* Full-width stacked inspector block (label above a wide control) */
+.stack-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.stack-row .label { margin-bottom: 0; }
 
 /* ---------- finish picker ---------- */
 .finish {

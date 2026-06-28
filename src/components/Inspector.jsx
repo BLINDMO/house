@@ -156,17 +156,21 @@ export default function Inspector({ onClose, onFlash }) {
               })}
             </div>
           </div>
-          <div className="row" style={{ alignItems: 'flex-start' }}>
+          <div className="stack-row">
             <div className="label">Flooring</div>
-            <div style={{ marginLeft: 'auto', maxWidth: '74%' }}>
-              <FinishPicker value={{ color: room.floorColor, tex: room.floorTex }} onChange={(f) => set({ floorColor: f.color, floorTex: f.tex })} />
-            </div>
+            <FinishPicker value={{ color: room.floorColor, tex: room.floorTex }} onChange={(f) => set({ floorColor: f.color, floorTex: f.tex })} />
+            <Slider label="Pattern scale" value={room.floorScale || 1} min={0.3} max={4} step={0.1}
+              onChange={(v) => set({ floorScale: v }, `fs:${room.uid}`)} display={`${Math.round((room.floorScale || 1) * 100)}%`} />
+            {rooms.length > 1 && (
+              <button className="btn" style={{ marginTop: 2 }}
+                onClick={() => { dispatch({ type: 'floorAll', patch: { floorColor: room.floorColor, floorTex: room.floorTex, floorScale: room.floorScale || 1 } }); onFlash?.('Flooring applied to all rooms') }}>
+                Apply flooring to whole house
+              </button>
+            )}
           </div>
-          <div className="row" style={{ alignItems: 'flex-start' }}>
+          <div className="stack-row">
             <div className="label">Wall finish</div>
-            <div style={{ marginLeft: 'auto', maxWidth: '74%' }}>
-              <FinishPicker value={{ color: room.wallColor, tex: room.wallTex }} onChange={(f) => set({ wallColor: f.color, wallTex: f.tex })} />
-            </div>
+            <FinishPicker value={{ color: room.wallColor, tex: room.wallTex }} onChange={(f) => set({ wallColor: f.color, wallTex: f.tex })} />
           </div>
           <div className="btn-row">
             <button className="btn" onClick={dup}><IconCopy size={18} /> Duplicate</button>

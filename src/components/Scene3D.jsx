@@ -191,10 +191,10 @@ export default function Scene3D({ onOpenInspector }) {
   // build a material for a finish {tex, color}. sizeU/sizeV are the surface
   // dimensions in metres; defTile is the fallback tile size for non-material
   // textures. Real Poly Haven materials tile at their declared real-world size.
-  function finishMaterial(tex, color, fallback, sizeU, sizeV, defTile = 1.5, extra = {}) {
+  function finishMaterial(tex, color, fallback, sizeU, sizeV, defTile = 1.5, extra = {}, texScale = 1) {
     const base = finishBase(tex)
     if (base) {
-      const tile = matRepeat(tex) || defTile
+      const tile = (matRepeat(tex) || defTile) * (texScale || 1)
       const repU = Math.max(1, sizeU / tile)
       const repV = Math.max(1, sizeV / tile)
       // Always clone: cached textures are shared, so per-surface repeat must be
@@ -442,7 +442,19 @@ export default function Scene3D({ onOpenInspector }) {
       const r = refs.current
       if (r.drag || r.rotate) { r.drag = null; r.rotate = null; controls.enabled = true }
       else if (r.pending) {
-        if (Math.hypot(e.clientX - r.pending.x, e.clientY - r.pending.y) < 5) live.current.dispatch({ type: 'select', sel: null })
+        // A tap (not a drag) on the floor selects that room and opens its
+        // inspector so flooring can be edited straight from 3D; empty clears.
+        if (Math.hypot(e.clientX - r.pending.x, e.clientY - r.pending.y) < 5) {
+          setNDC(e)
+          const p = floorHit()
+          const rm = p && live.current.rooms.find((q) => p.x >= q.x && p.x <= q.x + q.w && p.z >= q.z && p.z <= q.z + q.d)
+          if (rm) {
+            live.current.dispatch({ type: 'select', sel: { type: 'room', uid: rm.uid } })
+            live.current.onOpenInspector?.()
+          } else {
+            live.current.dispatch({ type: 'select', sel: null })
+          }
+        }
         r.pending = null
       }
       try { dom.releasePointerCapture?.(e.pointerId) } catch { /* noop */ }
@@ -553,7 +565,7 @@ export default function Scene3D({ onOpenInspector }) {
   useEffect(() => {
     const r = refs.current
     if (!r.roomGroup) return
-    disposeGroup(r.roomGroup); r.roomGroup.clear(); r.walls = []; r.wallMeshes = []
+    disposeGroup(r.roomGroup); r.roomGroup.clear(); r.walls = []; r.wallMeshes = []; r.floorMeshes = []
     r.roomTexList.forEach((tx) => tx.dispose()); r.roomTexList = []
     const skirtMat = new THREE.MeshStandardMaterial({ color: '#cfc7ba', roughness: 0.8 })
     const freeWallMat = new THREE.MeshStandardMaterial({ color: '#e8e3da', roughness: 0.95, side: THREE.DoubleSide })
@@ -616,10 +628,12 @@ export default function Scene3D({ onOpenInspector }) {
       const cx = x + w / 2
       const cz = z + d / 2
       const ftex = room.floorTex || (room.floorColor ? undefined : 'wood:oak')
-      const floorMat = finishMaterial(ftex, room.floorColor, '#b08a5e', w, d, 1.5, { roughness: 0.65, metalness: 0.02 })
+      const floorMat = finishMaterial(ftex, room.floorColor, '#b08a5e', w, d, 1.5, { roughness: 0.65, metalness: 0.02 }, room.floorScale || 1)
       const floor = new THREE.Mesh(new THREE.PlaneGeometry(w, d), floorMat)
       floor.rotation.x = -Math.PI / 2; floor.position.set(cx, 0, cz); floor.receiveShadow = true
+      floor.userData.roomUid = room.uid
       r.roomGroup.add(floor)
+      r.floorMeshes.push(floor)
       const wallMat = finishMaterial(room.wallTex, room.wallColor, '#e8e3da', w, height, 1.2, { roughness: 0.95, side: THREE.DoubleSide })
       const on = (s) => !room.wallsOn || room.wallsOn[s] !== false
       // Walls are centred on the room edges so neighbouring rooms share the
