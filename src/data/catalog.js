@@ -54,18 +54,8 @@ export const CATALOG = [
 
 export const CATALOG_BY_TYPE = Object.fromEntries(CATALOG.map((c) => [c.type, c]))
 
-import { isModelType, phId, PH_BY_ID, PH_DEFAULT_DIM } from './phModels.js'
-
-// Unified definition lookup for both procedural pieces and Poly Haven models.
-// Model defs carry placeholder dims (per category) until the real bounding box
-// is measured on first 3D load and stored on the item itself.
+// Definition lookup for a placed piece (all pieces are procedural).
 export function defFor(type) {
-  if (isModelType(type)) {
-    const m = PH_BY_ID[phId(type)]
-    if (!m) return null
-    const d = PH_DEFAULT_DIM[m.category] || { w: 0.6, d: 0.6, h: 0.6 }
-    return { type, name: m.name, category: m.category, w: d.w, d: d.d, h: d.h, color: '#b9bec6', shape: 'model', model: phId(type) }
-  }
   return CATALOG_BY_TYPE[type] || null
 }
 

@@ -1,7 +1,6 @@
 import React from 'react'
 import { useStore } from '../store.jsx'
 import { defFor } from '../data/catalog.js'
-import { isModelType } from '../data/phModels.js'
 import { effDims, formatLen, formatArea } from '../util.js'
 import { IconRotate, IconCopy, IconTrash } from './Icons.jsx'
 import FinishPicker from './FinishPicker.jsx'
@@ -88,7 +87,6 @@ export default function Inspector({ onClose, onFlash }) {
     const item = items.find((i) => i.uid === sel.uid)
     const c = item && defFor(item.type)
     if (!item || !c) return null
-    const isModel = isModelType(item.type)
     const dim = effDims(c, item)
     const s = item.scale || {}
     const avg = Math.round((((s.x ?? 1) + (s.z ?? 1)) / 2) * 100)
@@ -96,14 +94,12 @@ export default function Inspector({ onClose, onFlash }) {
       <>
         <Head title={c.name} sub={`${formatLen(dim.w, units)} × ${formatLen(dim.d, units)} × ${formatLen(dim.h, units)}`} onClose={onClose} />
         <div className="insp">
-          {!isModel && (
-            <div className="row" style={{ alignItems: 'flex-start' }}>
-              <div className="label">Colour</div>
-              <div style={{ marginLeft: 'auto', maxWidth: '74%' }}>
-                <FinishPicker value={{ color: item.color || c.color }} allowTexture={false} onChange={(f) => set({ color: f.color })} />
-              </div>
+          <div className="row" style={{ alignItems: 'flex-start' }}>
+            <div className="label">Colour</div>
+            <div style={{ marginLeft: 'auto', maxWidth: '74%' }}>
+              <FinishPicker value={{ color: item.color || c.color }} allowTexture={false} onChange={(f) => set({ color: f.color })} />
             </div>
-          )}
+          </div>
           <Slider label="Size" value={avg} min={30} max={300} step={1}
             onChange={(v) => set({ scale: { x: v / 100, y: v / 100, z: v / 100 } }, `sz:${item.uid}`)} display={`${avg}%`} />
           <div className="row"><div className="label">Footprint</div><div className="val">{formatLen(dim.w, units)} × {formatLen(dim.d, units)}</div></div>

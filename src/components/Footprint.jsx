@@ -1,5 +1,4 @@
 import React from 'react'
-import { phThumb } from '../data/phModels.js'
 
 // Top-down vector drawing of a furniture piece, centred at (0,0),
 // sized wpx × dpx. Used by both the catalog thumbnails and the 2D editor,
@@ -234,17 +233,6 @@ export default function Footprint({ item, wpx, dpx }) {
           {[[-0.22, -0.22], [0.22, -0.22], [-0.22, 0.22], [0.22, 0.22]].map(([fx, fy], i) => (
             <circle key={i} cx={w * fx} cy={d * fy} r={w * 0.13} fill="none" stroke={shade(color, 0.3)} strokeWidth={sw} />
           ))}
-        </>
-      )
-      break
-    case 'model':
-      body = (
-        <>
-          {rect(x, y, w, d, '#e9ecf0', r * 0.5, { stroke: '#b9c0c9', strokeWidth: sw })}
-          {item.model && (
-            <image href={phThumb(item.model)} x={x + sw} y={y + sw} width={w - 2 * sw} height={d - 2 * sw}
-              preserveAspectRatio="xMidYMid slice" opacity={0.95} />
-          )}
         </>
       )
       break

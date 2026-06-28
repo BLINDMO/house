@@ -1,14 +1,10 @@
 import React, { useMemo, useState } from 'react'
 import { CATALOG } from '../data/catalog.js'
-import { PH_MODELS, phThumb } from '../data/phModels.js'
 import Footprint from './Footprint.jsx'
 
-// Unified library: real Poly Haven models (with photo thumbnails) first, then
-// the built-in procedural pieces. Grouped by category with search.
-const LIBRARY = [
-  ...PH_MODELS.map((m) => ({ key: `ph:${m.id}`, type: `ph:${m.id}`, name: m.name, category: m.category, thumb: phThumb(m.id), real: true })),
-  ...CATALOG.map((c) => ({ key: c.type, type: c.type, name: c.name, category: c.category, proc: c })),
-]
+// Built-in procedural furniture library — everything renders from code (no
+// asset downloads), so pieces are fully movable, scalable and recolourable.
+const LIBRARY = CATALOG.map((c) => ({ key: c.type, type: c.type, name: c.name, category: c.category, proc: c }))
 const CAT_ORDER = ['Seating', 'Tables', 'Bedroom', 'Storage', 'Appliances', 'Lighting', 'Electronics', 'Decor', 'Kitchen']
 const CATS = ['All', ...CAT_ORDER.filter((c) => LIBRARY.some((i) => i.category === c))]
 
@@ -40,7 +36,7 @@ export default function Catalog({ onPick }) {
       <div className="sheet-head">
         <div>
           <h2>Library</h2>
-          <div className="sub">{LIBRARY.length} pieces · {PH_MODELS.length} photoreal · tap to place</div>
+          <div className="sub">{LIBRARY.length} pieces · tap to place</div>
         </div>
       </div>
 
@@ -58,9 +54,7 @@ export default function Catalog({ onPick }) {
         {list.map((item) => (
           <button key={item.key} className="lib-card" onClick={() => onPick(item.type)} title={item.name}>
             <div className="lib-thumb">
-              {item.real
-                ? <img src={item.thumb} loading="lazy" alt={item.name} draggable="false" />
-                : <ProcThumb item={item.proc} />}
+              <ProcThumb item={item.proc} />
             </div>
             <div className="lib-name">{item.name}</div>
           </button>
