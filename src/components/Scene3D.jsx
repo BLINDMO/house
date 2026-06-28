@@ -442,17 +442,20 @@ export default function Scene3D({ onOpenInspector }) {
       const r = refs.current
       if (r.drag || r.rotate) { r.drag = null; r.rotate = null; controls.enabled = true }
       else if (r.pending) {
-        // A tap (not a drag) on the floor selects that room and opens its
-        // inspector so flooring can be edited straight from 3D; empty clears.
+        // A tap (not a drag) on empty space: if something is selected, just
+        // deselect it. Only when nothing is selected does tapping a room's
+        // floor select that room and open its inspector (edit flooring).
         if (Math.hypot(e.clientX - r.pending.x, e.clientY - r.pending.y) < 5) {
-          setNDC(e)
-          const p = floorHit()
-          const rm = p && live.current.rooms.find((q) => p.x >= q.x && p.x <= q.x + q.w && p.z >= q.z && p.z <= q.z + q.d)
-          if (rm) {
-            live.current.dispatch({ type: 'select', sel: { type: 'room', uid: rm.uid } })
-            live.current.onOpenInspector?.()
-          } else {
+          if (live.current.selected) {
             live.current.dispatch({ type: 'select', sel: null })
+          } else {
+            setNDC(e)
+            const p = floorHit()
+            const rm = p && live.current.rooms.find((q) => p.x >= q.x && p.x <= q.x + q.w && p.z >= q.z && p.z <= q.z + q.d)
+            if (rm) {
+              live.current.dispatch({ type: 'select', sel: { type: 'room', uid: rm.uid } })
+              live.current.onOpenInspector?.()
+            }
           }
         }
         r.pending = null

@@ -56,6 +56,7 @@ export default function App() {
     if (selRoom) { x = selRoom.x + selRoom.w / 2; z = selRoom.z + selRoom.d / 2 }
     else if (rooms.length) { const r = rooms[rooms.length - 1]; x = r.x + r.w / 2; z = r.z + r.d / 2 }
     dispatch({ type: 'addItem', kind, x, z })
+    setOverride(null) // close the catalog so the new piece is editable in view
     haptic(10)
     flash('Added — drag to position')
   }
