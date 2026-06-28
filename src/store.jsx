@@ -147,9 +147,9 @@ function reducer(state, action) {
         uid: uid(), x1: action.x1, z1: action.z1, x2: action.x2, z2: action.z2,
         height: action.height ?? state.defaultHeight, thickness: 0.1,
       })
-      // Keep the wall tool active and selection clear so you can chain walls
-      // without the inspector popping up between segments.
-      return { ...state, walls: [...state.walls, wall], selected: null }
+      // One-shot: after drawing a wall, drop back to Select (ready to edit or
+      // start another action) rather than staying armed to draw more walls.
+      return { ...state, walls: [...state.walls, wall], tool: 'select', selected: null }
     }
 
     // Apply one floor finish to every room at once (item: whole-house flooring).

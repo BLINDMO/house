@@ -2,6 +2,7 @@ import React, { useLayoutEffect, useRef, useState } from 'react'
 import { useStore, footHalf } from '../store.jsx'
 import { defFor } from '../data/catalog.js'
 import { wallGeometry, refEq } from '../wall.js'
+import { MATERIAL_BY_ID, matUrl } from '../data/materials.js'
 import { effDims, formatLen, haptic } from '../util.js'
 import Footprint from './Footprint.jsx'
 import { IconCenter, IconCheck, IconClose, IconUndo } from './Icons.jsx'
@@ -20,6 +21,20 @@ const CLOSE_PX = 16
 const snap = (v, g) => Math.round(v / g) * g
 const clampV = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 const wallOn = (room, side) => !room.wallsOn || room.wallsOn[side] !== false
+
+const WOOD_HEX = { oak: '#c79a6b', walnut: '#6e4a30', birch: '#d8c7a3', grey: '#9a9a92' }
+// How a room's floor should be drawn in the 2D plan: a tiled texture image for
+// bundled materials, otherwise a representative colour.
+function floorFill(r) {
+  const tex = r.floorTex || (r.floorColor ? null : 'wood:oak')
+  if (!tex) return { color: r.floorColor || '#eef1f5' }
+  if (tex.startsWith('wood:')) return { color: WOOD_HEX[tex.slice(5)] || '#c79a6b' }
+  if (tex.startsWith('mat:')) {
+    const m = MATERIAL_BY_ID[tex.slice(4)]
+    if (m) return { mat: tex.slice(4), repeat: m.repeat || 1.5, color: m.color }
+  }
+  return { color: r.floorColor || '#cdb89a' }
+}
 
 function pointInPoly(x, z, pts) {
   let inside = false
@@ -598,17 +613,29 @@ export default function Editor2D() {
         <g pointerEvents="none">{gridLines}</g>
         <g pointerEvents="none">{gridLabels}</g>
 
-        {/* room floors + name */}
+        {/* room floors + name — shows the selected flooring on the plan */}
         {rooms.map((r) => {
           const [x0, y0] = toScreen(r.x, r.z)
           const wpx = r.w * scale
           const dpx = r.d * scale
+          const f = floorFill(r)
+          const tile = f.mat ? Math.max(10, f.repeat * scale) : 0
+          const patId = `fp-${r.uid}`
           return (
             <g key={r.uid} pointerEvents="none">
-              <rect x={x0} y={y0} width={wpx} height={dpx} fill={FLOOR} />
+              {f.mat && (
+                <defs>
+                  <pattern id={patId} patternUnits="userSpaceOnUse" width={tile} height={tile} patternTransform={`translate(${panX} ${panY})`}>
+                    <rect width={tile} height={tile} fill={f.color} />
+                    <image href={matUrl(f.mat)} width={tile} height={tile} preserveAspectRatio="xMidYMid slice" />
+                  </pattern>
+                </defs>
+              )}
+              <rect x={x0} y={y0} width={wpx} height={dpx} fill={f.mat ? `url(#${patId})` : f.color} />
               {r.name && wpx > 46 && dpx > 26 && (
                 <text x={x0 + wpx / 2} y={y0 + dpx / 2} textAnchor="middle" dominantBaseline="middle"
-                  fontSize={12} fontWeight={700} fill="#9aa1ab" letterSpacing="0.3"
+                  fontSize={12} fontWeight={700} fill="#33373d" stroke="#fff" strokeWidth={3} paintOrder="stroke"
+                  strokeLinejoin="round" letterSpacing="0.3"
                   fontFamily="-apple-system, system-ui, sans-serif">{r.name}</text>
               )}
             </g>

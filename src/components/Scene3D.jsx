@@ -19,8 +19,8 @@ import { IconCenter } from './Icons.jsx'
 
 // Outdoor presets — an unseen sun over a green field. Daytime by default.
 const AMBIANCE = {
-  day: { bg: '#bcd8f2', exposure: 1.05, env: 1.0, key: ['#fff6e8', 2.6], fill: ['#cfe2ff', 0.5], hemi: 0.7, amb: 0.3, ground: '#5f8f4e', skyHemi: '#cfe3ff', grndHemi: '#5a7a44' },
-  night: { bg: '#0a1222', exposure: 1.12, env: 0.22, key: ['#aac2ff', 0.6], fill: ['#485fb0', 0.3], hemi: 0.2, amb: 0.1, ground: '#22311f', skyHemi: '#33406a', grndHemi: '#1d2a18' },
+  day: { bg: '#bcd8f2', exposure: 1.05, env: 1.0, key: ['#fff6e8', 2.6], fill: ['#cfe2ff', 0.5], hemi: 0.7, amb: 0.3, ground: '#d8e2cf', skyHemi: '#cfe3ff', grndHemi: '#5a7a44' },
+  night: { bg: '#0a1222', exposure: 1.12, env: 0.22, key: ['#aac2ff', 0.6], fill: ['#485fb0', 0.3], hemi: 0.2, amb: 0.1, ground: '#46543b', skyHemi: '#33406a', grndHemi: '#1d2a18' },
 }
 const snap = (v, g) => Math.round(v / g) * g
 const clamp8 = (v) => Math.max(0, Math.min(255, Math.round(v)))
@@ -296,15 +296,23 @@ export default function Scene3D({ onOpenInspector }) {
       composer = null
     }
 
-    // grassy ground field
+    // grassy ground field (real CC0 grass texture tiled across the field)
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(400, 400),
-      new THREE.MeshStandardMaterial({ color: '#5f8f4e', roughness: 1 })
+      new THREE.MeshStandardMaterial({ color: '#d8e2cf', roughness: 1 })
     )
     ground.rotation.x = -Math.PI / 2
     ground.position.y = -0.04
     ground.receiveShadow = true
     scene.add(ground)
+    new THREE.TextureLoader().load(matUrl('grass'), (t) => {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping
+      t.colorSpace = THREE.SRGBColorSpace
+      t.repeat.set(140, 140)
+      ground.material.map = t
+      ground.material.needsUpdate = true
+      refs.current.groundTex = t
+    }, undefined, () => { /* offline: keep solid colour */ })
 
     const roomGroup = new THREE.Group()
     const furnitureGroup = new THREE.Group()
@@ -383,6 +391,7 @@ export default function Scene3D({ onOpenInspector }) {
             const v = door ? 0 : Math.max(0.3, Math.min(g.height - h - 0.05, p.y - h / 2))
             const uu = Math.max(0.05, Math.min(g.length - w - 0.05, u - w / 2))
             dsp({ type: 'addOpening', opening: { wall: rec.ref, u: uu, v, w, h, kind: door ? 'doorway' : 'window' } })
+            dsp({ type: 'openingMode', value: false }) // one-shot: back to Select
             haptic(12)
             live.current.onOpenInspector?.()
           }
@@ -521,6 +530,7 @@ export default function Scene3D({ onOpenInspector }) {
       refs.current.woodCache.forEach((t) => t.dispose())
       refs.current.imgCache.forEach((t) => t.dispose())
       refs.current.roomTexList.forEach((t) => t.dispose())
+      refs.current.groundTex?.dispose?.()
       refs.current.envMap?.dispose?.()
       composer?.dispose?.()
       pmrem.dispose(); renderer.dispose()
