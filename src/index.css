@@ -1384,3 +1384,65 @@ input[type='range']::-moz-range-thumb {
   transition: transform 0.1s ease;
 }
 .empty-cta:active { transform: scale(0.96); }
+
+/* ---------- start screen ---------- */
+.start-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(120% 100% at 50% 0%, #1a2030, #0b0d12 70%);
+}
+.start-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface, #14171d);
+  border: 1px solid var(--line, #262b34);
+  border-radius: 20px;
+  padding: 26px 24px 22px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+.start-brand { display: flex; align-items: center; gap: 13px; margin-bottom: 22px; }
+.start-brand .logo {
+  width: 42px; height: 42px; flex: none;
+  display: grid; place-items: center;
+  border-radius: 12px; color: #20160a;
+  background: linear-gradient(145deg, var(--accent, #d9b779), #c5a05c);
+}
+.start-brand h1 { font-size: 18px; font-weight: 800; margin: 0; color: var(--text, #eef1f5); }
+.start-brand p { font-size: 12.5px; margin: 2px 0 0; color: var(--text-3, #8a929c); }
+.start-actions { display: flex; flex-direction: column; gap: 12px; }
+.start-btn {
+  width: 100%;
+  display: flex; flex-direction: column; gap: 3px;
+  text-align: left;
+  padding: 15px 16px;
+  border-radius: 13px;
+  background: var(--surface-2, #1b1f27);
+  border: 1px solid var(--line, #262b34);
+  color: var(--text, #eef1f5);
+  transition: transform 0.1s ease, border-color 0.18s ease, background 0.18s ease;
+}
+.start-btn b { font-size: 15px; font-weight: 700; }
+.start-btn span { font-size: 12.5px; color: var(--text-3, #8a929c); }
+.start-btn:hover { border-color: var(--accent-line, #6b5a2e); }
+.start-btn:active { transform: scale(0.98); }
+.start-btn.primary {
+  background: linear-gradient(145deg, var(--accent, #d9b779), #c5a05c);
+  border-color: transparent; color: #20160a;
+}
+.start-btn.primary span { color: #4a3a16; }
+.gen-form { display: flex; flex-direction: column; gap: 14px; }
+.gen-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.gen-row > span { font-size: 14px; font-weight: 600; color: var(--text-2, #c4ccd6); }
+.gen-step { display: flex; align-items: center; gap: 14px; }
+.gen-step button {
+  width: 34px; height: 34px; border-radius: 9px; font-size: 20px;
+  background: var(--surface-2, #1b1f27); border: 1px solid var(--line, #262b34); color: var(--text, #eef1f5);
+}
+.gen-step b { min-width: 18px; text-align: center; font-size: 16px; }
+.gen-sizes { display: flex; gap: 7px; }
+.gen-buttons { display: flex; gap: 10px; margin-top: 6px; }
+.gen-buttons .start-btn { flex-direction: row; align-items: center; justify-content: center; }

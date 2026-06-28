@@ -5,13 +5,17 @@ import Editor2D from './Editor2D.jsx'
 import Scene3D from './Scene3D.jsx'
 import Rail from './Rail.jsx'
 import Panel from './Panel.jsx'
+import StartScreen from './StartScreen.jsx'
 import { IconPlan, IconCube, IconUndo, IconRedo, IconShare, IconNew } from './Icons.jsx'
 
 export default function App() {
   const { state, dispatch, canUndo, canRedo } = useStore()
-  const { view, selected, rooms } = state
+  const { view, selected, rooms, walls, items } = state
   const [override, setOverride] = useState(null) // 'catalog' | 'settings' | 'presets'
   const [toast, setToast] = useState(null)
+  // Show the start screen on an empty design (fresh launch or after New).
+  const isEmpty = rooms.length === 0 && walls.length === 0 && items.length === 0
+  const [showStart, setShowStart] = useState(isEmpty)
 
   const flash = useCallback((msg) => setToast({ msg, t: Date.now() }), [])
   useEffect(() => {
@@ -34,7 +38,15 @@ export default function App() {
   const newDesign = () => {
     dispatch({ type: 'reset' })
     setOverride(null)
-    flash('New design — undo to restore')
+    setShowStart(true)
+  }
+
+  const startBlank = () => { setShowStart(false); flash('Blank project — pick Room to start') }
+  const startGenerate = (genRooms) => {
+    dispatch({ type: 'loadRooms', rooms: genRooms })
+    setShowStart(false)
+    dispatch({ type: 'view', view: '2d' })
+    flash('House generated — tap a room to edit')
   }
 
   const addKind = (kind) => {
@@ -109,6 +121,8 @@ export default function App() {
       </div>
 
       {toast && <div className="toast" key={toast.t}>{toast.msg}</div>}
+
+      {showStart && <StartScreen onBlank={startBlank} onGenerate={startGenerate} />}
     </div>
   )
 }

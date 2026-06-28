@@ -120,6 +120,17 @@ function reducer(state, action) {
     case 'select':
       return { ...state, selected: action.sel || null }
 
+    // Replace the whole design with a generated set of rooms (keeps settings).
+    case 'loadRooms': {
+      const rooms = action.rooms.map((r) => clampRoom({ uid: uid(), height: state.defaultHeight, ...r }))
+      return {
+        ...starter(),
+        view: state.view, units: state.units, ambiance: state.ambiance,
+        quality: state.quality, defaultHeight: state.defaultHeight,
+        rooms, selected: null,
+      }
+    }
+
     case 'addRoom': {
       const room = clampRoom({
         uid: uid(), name: action.name || `Room ${state.rooms.length + 1}`,
@@ -213,7 +224,7 @@ function reducer(state, action) {
 }
 
 // ---- history wrapper (undo / redo with drag coalescing) ----
-const HISTORIC = new Set(['addRoom', 'addWall', 'addSketch', 'addItem', 'addBuiltin', 'addBuiltins', 'addOpening', 'floorAll', 'update', 'remove', 'duplicate', 'clear', 'reset', 'defaultHeight'])
+const HISTORIC = new Set(['addRoom', 'addWall', 'addSketch', 'addItem', 'addBuiltin', 'addBuiltins', 'addOpening', 'floorAll', 'loadRooms', 'update', 'remove', 'duplicate', 'clear', 'reset', 'defaultHeight'])
 const LIMIT = 80
 
 function root(c, action) {
