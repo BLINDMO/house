@@ -119,10 +119,13 @@ function reducer(state, action) {
 
     case 'addRoom': {
       const room = clampRoom({
-        uid: uid(), x: action.x, z: action.z, w: action.w, d: action.d,
+        uid: uid(), name: action.name || `Room ${state.rooms.length + 1}`,
+        x: action.x, z: action.z, w: action.w, d: action.d,
         height: action.height ?? state.defaultHeight, floor: '#b08a5e',
       })
-      return { ...state, rooms: [...state.rooms, room], selected: { type: 'room', uid: room.uid } }
+      // Drawing a room completes the gesture: drop back to the Select tool so
+      // the next tap edits/moves it instead of drawing another room.
+      return { ...state, rooms: [...state.rooms, room], tool: 'select', selected: { type: 'room', uid: room.uid } }
     }
 
     case 'addWall': {
@@ -130,7 +133,9 @@ function reducer(state, action) {
         uid: uid(), x1: action.x1, z1: action.z1, x2: action.x2, z2: action.z2,
         height: action.height ?? state.defaultHeight, thickness: 0.1,
       })
-      return { ...state, walls: [...state.walls, wall], selected: { type: 'wall', uid: wall.uid } }
+      // Keep the wall tool active and selection clear so you can chain walls
+      // without the inspector popping up between segments.
+      return { ...state, walls: [...state.walls, wall], selected: null }
     }
 
     case 'addBuiltin': {

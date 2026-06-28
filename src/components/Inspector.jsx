@@ -136,8 +136,14 @@ export default function Inspector({ onClose, onFlash }) {
     const area = room.w * room.d
     return (
       <>
-        <Head title="Room" sub={`${formatLen(room.w, units)} × ${formatLen(room.d, units)}`} onClose={onClose} />
+        <Head title={room.name || 'Room'} sub={`${formatLen(room.w, units)} × ${formatLen(room.d, units)}`} onClose={onClose} />
         <div className="insp">
+          <div className="row">
+            <div className="label">Name</div>
+            <input className="name-input" type="text" value={room.name || ''} placeholder="Room"
+              onChange={(e) => set({ name: e.target.value })}
+              style={{ marginLeft: 'auto', maxWidth: '64%', textAlign: 'right' }} />
+          </div>
           <MeasureRow label="Width" m={room.w} min={0.5} max={40} units={units} onChange={(v) => set({ w: v }, `rw:${room.uid}`)} />
           <MeasureRow label="Depth" m={room.d} min={0.5} max={40} units={units} onChange={(v) => set({ d: v }, `rd:${room.uid}`)} />
           <MeasureRow label="Wall height" m={room.height} min={1.5} max={6} units={units} onChange={(v) => set({ height: v }, `rh:${room.uid}`)} />

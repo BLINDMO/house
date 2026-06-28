@@ -259,6 +259,35 @@ export default function Editor2D() {
   const snapX = (v, except) => { const t = snapEdge(v, edgeTargets(except).xs); return t != null ? t : snap(v, SNAP) }
   const snapZ = (v, except) => { const t = snapEdge(v, edgeTargets(except).zs); return t != null ? t : snap(v, SNAP) }
 
+  // Anchor points walls snap to: every room corner and every wall endpoint.
+  function wallVertices() {
+    const out = []
+    for (const r of rooms) out.push({ x: r.x, z: r.z }, { x: r.x + r.w, z: r.z }, { x: r.x, z: r.z + r.d }, { x: r.x + r.w, z: r.z + r.d })
+    for (const w of walls) out.push({ x: w.x1, z: w.z1 }, { x: w.x2, z: w.z2 })
+    return out
+  }
+  // Snap to the nearest anchor within `thr` metres, else null.
+  function snapVertex(x, z, thr = 0.35) {
+    let best = null
+    let bd = thr
+    for (const v of wallVertices()) {
+      const d = Math.hypot(x - v.x, z - v.z)
+      if (d < bd) { bd = d; best = v }
+    }
+    return best
+  }
+  // Resolve a dragged wall end: snap to an anchor if close, otherwise lock the
+  // segment to horizontal/vertical (keeps walls square) and snap to the grid.
+  function resolveWallEnd(x1, z1, wx, wz) {
+    const v = snapVertex(wx, wz)
+    if (v) return { x: v.x, z: v.z }
+    let ex = wx
+    let ez = wz
+    if (Math.abs(ex - x1) >= Math.abs(ez - z1)) ez = z1
+    else ex = x1
+    return { x: snapX(ex), z: snapZ(ez) }
+  }
+
   const onDown = (e) => {
     const [px, py] = ptr(e)
     pointers.current.set(e.pointerId, { x: px, y: py })
@@ -284,8 +313,9 @@ export default function Editor2D() {
       return
     }
     if (tool === 'wall') {
-      const sx = snapX(wx)
-      const sz = snapZ(wz)
+      const v = snapVertex(wx, wz)
+      const sx = v ? v.x : snapX(wx)
+      const sz = v ? v.z : snapZ(wz)
       setGesture({ kind: 'drawWall', x1: sx, z1: sz, cur: { x1: sx, z1: sz, x2: sx, z2: sz } })
       return
     }
@@ -378,7 +408,8 @@ export default function Editor2D() {
       const z1 = snapZ(wz)
       setGesture((s) => ({ ...s, cur: { x: Math.min(s.x0, x1), z: Math.min(s.z0, z1), w: Math.abs(x1 - s.x0), d: Math.abs(z1 - s.z0) } }))
     } else if (g.kind === 'drawWall') {
-      setGesture((s) => ({ ...s, cur: { x1: s.x1, z1: s.z1, x2: snapX(wx), z2: snapZ(wz) } }))
+      const e = resolveWallEnd(g.x1, g.z1, wx, wz)
+      setGesture((s) => ({ ...s, cur: { x1: s.x1, z1: s.z1, x2: e.x, z2: e.z } }))
     } else if (g.kind === 'moveItem') {
       dispatch({ type: 'update', sel: { type: 'item', uid: g.uid }, patch: { x: snap(wx - g.ox, ITEM_GRID), z: snap(wz - g.oz, ITEM_GRID) }, mergeKey: `mv:${g.uid}` })
     } else if (g.kind === 'resizeItem') {
@@ -567,10 +598,21 @@ export default function Editor2D() {
         <g pointerEvents="none">{gridLines}</g>
         <g pointerEvents="none">{gridLabels}</g>
 
-        {/* room floors */}
+        {/* room floors + name */}
         {rooms.map((r) => {
           const [x0, y0] = toScreen(r.x, r.z)
-          return <rect key={r.uid} x={x0} y={y0} width={r.w * scale} height={r.d * scale} fill={FLOOR} pointerEvents="none" />
+          const wpx = r.w * scale
+          const dpx = r.d * scale
+          return (
+            <g key={r.uid} pointerEvents="none">
+              <rect x={x0} y={y0} width={wpx} height={dpx} fill={FLOOR} />
+              {r.name && wpx > 46 && dpx > 26 && (
+                <text x={x0 + wpx / 2} y={y0 + dpx / 2} textAnchor="middle" dominantBaseline="middle"
+                  fontSize={12} fontWeight={700} fill="#9aa1ab" letterSpacing="0.3"
+                  fontFamily="-apple-system, system-ui, sans-serif">{r.name}</text>
+              )}
+            </g>
+          )
         })}
 
         {/* room wall sides */}

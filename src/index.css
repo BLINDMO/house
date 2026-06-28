@@ -847,6 +847,20 @@ button {
   font-variant-numeric: tabular-nums;
   -moz-appearance: textfield;
 }
+.name-input {
+  padding: 7px 11px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.name-input:focus {
+  outline: none;
+  border-color: var(--accent-line);
+  background: var(--surface);
+}
 .measure-inputs input::-webkit-outer-spin-button,
 .measure-inputs input::-webkit-inner-spin-button {
   -webkit-appearance: none;
