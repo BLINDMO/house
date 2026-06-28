@@ -233,7 +233,7 @@ function root(c, action) {
     const prev = c.past[c.past.length - 1]
     return {
       past: c.past.slice(0, -1),
-      present: { ...prev, view: c.present.view, units: c.present.units, ambiance: c.present.ambiance, tool: c.present.tool },
+      present: { ...prev, view: c.present.view, units: c.present.units, ambiance: c.present.ambiance, quality: c.present.quality, tool: c.present.tool, openingMode: c.present.openingMode },
       future: [c.present, ...c.future].slice(0, LIMIT),
       lastKey: null, lastTime: 0,
     }
@@ -243,7 +243,7 @@ function root(c, action) {
     const next = c.future[0]
     return {
       past: [...c.past, c.present].slice(-LIMIT),
-      present: { ...next, view: c.present.view, units: c.present.units, ambiance: c.present.ambiance, tool: c.present.tool },
+      present: { ...next, view: c.present.view, units: c.present.units, ambiance: c.present.ambiance, quality: c.present.quality, tool: c.present.tool, openingMode: c.present.openingMode },
       future: c.future.slice(1),
       lastKey: null, lastTime: 0,
     }

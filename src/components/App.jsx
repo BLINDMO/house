@@ -27,7 +27,10 @@ export default function App() {
   // displayed panel: an explicit override wins; otherwise selection shows the
   // inspector — except in 3D, where selecting only enables free dragging and a
   // floating ⋯ button opens the inspector on demand (so it never blocks the view)
-  const panel = override || (selected && view !== '3d' ? 'inspector' : null)
+  let panel = override || (selected && view !== '3d' ? 'inspector' : null)
+  // The inspector needs a selection — if there's none (e.g. after undo removed
+  // the selected piece), don't leave an empty panel open.
+  if (panel === 'inspector' && !selected) panel = null
 
   const setView = (v) => dispatch({ type: 'view', view: v })
   const openPanel = (kind) => setOverride((p) => (p === kind ? null : kind))
