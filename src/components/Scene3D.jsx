@@ -121,6 +121,42 @@ function addOpeningFrame(group, geom, o, thickness, mat) {
   group.add(node)
 }
 
+// Canonical key for the infinite line a wall lies on (sign-normalised normal +
+// signed offset), so coplanar walls — even partially overlapping ones from
+// adjacent rooms — share a key.
+function wallLineKey(g) {
+  let nx = g.nx, nz = g.nz
+  if (nx < -1e-6 || (Math.abs(nx) < 1e-6 && nz < 0)) { nx = -nx; nz = -nz }
+  const c = g.ox * nx + g.oz * nz
+  const r3 = (v) => Math.round(v * 1000) / 1000
+  return `${r3(nx)},${r3(nz)},${r3(c)}`
+}
+// Re-express an opening from wall frame g2 into wall frame g (same line).
+function mapOpeningToFrame(o, g2, g) {
+  const ax = (g2.ox + g2.dirx * o.u - g.ox) * g.dirx + (g2.oz + g2.dirz * o.u - g.oz) * g.dirz
+  const bx = (g2.ox + g2.dirx * (o.u + o.w) - g.ox) * g.dirx + (g2.oz + g2.dirz * (o.u + o.w) - g.oz) * g.dirz
+  return { ...o, u: Math.min(ax, bx), w: Math.abs(bx - ax) }
+}
+// Every opening that lies on this wall's line (its own + any coplanar
+// neighbour's), expressed in this wall's frame — so a doorway cut from one
+// room also cuts the neighbouring room's coplanar wall (no one-sided holes).
+function collinearOpenings(ref, geom, rooms, walls, openings) {
+  const lk = wallLineKey(geom)
+  const refs = []
+  for (const rm of rooms) for (const side of ['n', 'e', 's', 'w']) refs.push({ kind: 'room', uid: rm.uid, side })
+  for (const wl of walls) refs.push({ kind: 'wall', uid: wl.uid })
+  const out = []
+  for (const r2 of refs) {
+    const g2 = wallGeometry(r2, rooms, walls)
+    if (!g2 || wallLineKey(g2) !== lk) continue
+    for (const o of openings) {
+      if (!refEq(o.wall, r2)) continue
+      out.push(refEq(r2, ref) ? o : mapOpeningToFrame(o, g2, geom))
+    }
+  }
+  return out
+}
+
 function woodTexture(baseHex = '#b08a5e') {
   const col = new THREE.Color(baseHex)
   const br = col.r * 255
@@ -771,7 +807,7 @@ export default function Scene3D({ onOpenInspector, onFlash }) {
     const addCollider = (ref) => {
       const g = wallGeometry(ref, rooms, walls)
       if (!g) return
-      const mine = openings.filter((o) => refEq(o.wall, ref))
+      const mine = collinearOpenings(ref, g, rooms, walls, openings)
       const gaps = mine.filter((o) => o.v <= 0.25 && o.w > 0.5).map((o) => [Math.max(0, o.u), Math.min(g.length, o.u + o.w)])
       colliders.push({ ox: g.ox, oz: g.oz, dx: g.dirx, dz: g.dirz, len: g.length, nx: g.nx, nz: g.nz, gaps })
       for (const o of mine) {
@@ -819,13 +855,13 @@ export default function Scene3D({ onOpenInspector, onFlash }) {
     const freeWallMat = new THREE.MeshStandardMaterial({ color: '#e8e3da', roughness: 0.95, side: THREE.DoubleSide })
     const frameMat = new THREE.MeshStandardMaterial({ color: '#efe9df', roughness: 0.7, metalness: 0.03 })
     const t = 0.1
-    const opsFor = (ref) => openings.filter((o) => refEq(o.wall, ref))
+    const opsFor = (ref, geom) => collinearOpenings(ref, geom, rooms, walls, openings)
 
     // Build a wall (room side or free wall) with its openings punched out, plus
     // a casing frame around each opening. `over` extends the face past the ends
     // so room walls still join cleanly at corners.
     const buildWall = (ref, geom, material, over, thickness, hideable) => {
-      const ops = opsFor(ref)
+      const ops = opsFor(ref, geom)
       const geo = wallShapeGeometry(geom, thickness, over, ops)
       const m = new THREE.Mesh(geo, material)
       m.castShadow = true; m.receiveShadow = true
@@ -845,7 +881,7 @@ export default function Scene3D({ onOpenInspector, onFlash }) {
     // Skirting along the wall, broken around any floor-level opening.
     const buildSkirt = (ref, geom) => {
       const L = geom.length
-      const gaps = opsFor(ref)
+      const gaps = opsFor(ref, geom)
         .filter((o) => o.v <= 0.06)
         .map((o) => [Math.max(0, o.u - 0.05), Math.min(L, o.u + o.w + 0.05)])
         .filter(([a, b]) => b > a)
