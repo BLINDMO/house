@@ -34,6 +34,9 @@ export const IconTune = (p) => (
 export const IconClose = (p) => (
   <S {...p}><path d="M6 6l12 12M18 6 6 18" /></S>
 )
+export const IconDoor = (p) => (
+  <S {...p}><path d="M4 21h16M6 21V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v17" /><path d="M14 12h.01" /></S>
+)
 export const IconReset = (p) => (
   <S {...p}><path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.3 2.6L3 8" /><path d="M3 4v4h4" /></S>
 )

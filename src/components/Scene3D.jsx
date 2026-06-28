@@ -14,7 +14,7 @@ import { defFor } from '../data/catalog.js'
 import { isModelType, phId } from '../data/phModels.js'
 import { loadModel, instanceModel } from '../three/modelLoader.js'
 import { haptic, effDims } from '../util.js'
-import { wallGeometry } from '../wall.js'
+import { wallGeometry, refEq } from '../wall.js'
 import { buildItem, disposeGroup } from '../three/furniture.js'
 import { MATERIAL_BY_ID, matUrl, HDRI_URL } from '../data/materials.js'
 import { IconCenter } from './Icons.jsx'
@@ -26,7 +26,76 @@ const AMBIANCE = {
 }
 const snap = (v, g) => Math.round(v / g) * g
 const clamp8 = (v) => Math.max(0, Math.min(255, Math.round(v)))
+const clampN = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 const WOOD_BASE = { oak: '#c79a6b', walnut: '#6e4a30', birch: '#d8c7a3', grey: '#9a9a92' }
+
+// Local wall-face frame (u along wall, v up, thickness along the inward normal)
+// → world transform, shared by the wall solid and its opening frames.
+function wallMatrix(geom) {
+  const dir = new THREE.Vector3(geom.dirx, 0, geom.dirz)
+  const up = new THREE.Vector3(0, 1, 0)
+  const nrm = new THREE.Vector3(geom.nx, 0, geom.nz)
+  return new THREE.Matrix4().makeBasis(dir, up, nrm).setPosition(geom.ox, 0, geom.oz)
+}
+
+// Build a wall as an extruded rectangle with a rectangular hole punched out for
+// each opening (doorway / window / pass-through) — no CSG. `over` extends the
+// face past each end so neighbouring room walls still overlap cleanly at the
+// corners. Holes are inset a hair from every edge so the triangulator stays
+// robust even when an opening reaches the floor or a wall end.
+function wallShapeGeometry(geom, thickness, over, ops) {
+  const L = geom.length
+  const H = geom.height
+  const shape = new THREE.Shape()
+  shape.moveTo(-over, -0.05)
+  shape.lineTo(L + over, -0.05)
+  shape.lineTo(L + over, H)
+  shape.lineTo(-over, H)
+  shape.closePath()
+  for (const o of ops) {
+    const u0 = clampN(o.u, 0.02, L - 0.02)
+    const u1 = clampN(o.u + o.w, 0.02, L - 0.02)
+    const v0 = clampN(o.v, 0, H - 0.04)
+    const v1 = clampN(o.v + o.h, v0 + 0.02, H - 0.02)
+    if (u1 - u0 < 0.04 || v1 - v0 < 0.04) continue
+    const hole = new THREE.Path()
+    hole.moveTo(u0, v0); hole.lineTo(u0, v1); hole.lineTo(u1, v1); hole.lineTo(u1, v0); hole.closePath()
+    shape.holes.push(hole)
+  }
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false, curveSegments: 1 })
+  geo.translate(0, 0, -thickness / 2)
+  geo.applyMatrix4(wallMatrix(geom))
+  geo.computeVertexNormals()
+  return geo
+}
+
+// A slim casing (jambs + head, plus a sill for raised openings) lining each
+// opening so doors and windows read as real framed apertures.
+function addOpeningFrame(group, geom, o, thickness, mat) {
+  const L = geom.length
+  const H = geom.height
+  const u0 = clampN(o.u, 0, L)
+  const u1 = clampN(o.u + o.w, 0, L)
+  const v0 = clampN(o.v, 0, H)
+  const v1 = clampN(o.v + o.h, 0, H)
+  if (u1 - u0 < 0.05 || v1 - v0 < 0.05) return
+  const cw = 0.05
+  const pd = thickness + 0.03
+  const node = new THREE.Group()
+  node.matrixAutoUpdate = false
+  node.matrix.copy(wallMatrix(geom))
+  const add = (w, h, uc, vc) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, pd), mat)
+    m.position.set(uc, vc, 0)
+    m.castShadow = true; m.receiveShadow = true
+    node.add(m)
+  }
+  add(cw, v1 - v0, u0 - cw / 2, (v0 + v1) / 2) // left jamb
+  add(cw, v1 - v0, u1 + cw / 2, (v0 + v1) / 2) // right jamb
+  add(u1 - u0 + 2 * cw, cw, (u0 + u1) / 2, v1 + cw / 2) // head
+  if (v0 > 0.06) add(u1 - u0 + 2 * cw, cw, (u0 + u1) / 2, v0 - cw / 2) // sill
+  group.add(node)
+}
 
 function woodTexture(baseHex = '#b08a5e') {
   const col = new THREE.Color(baseHex)
@@ -58,7 +127,7 @@ function woodTexture(baseHex = '#b08a5e') {
 
 export default function Scene3D({ onOpenInspector }) {
   const { state, dispatch } = useStore()
-  const { rooms, walls, items, builtins, selected, ambiance } = state
+  const { rooms, walls, items, builtins, openings, selected, ambiance } = state
   const { map: assetMap } = useAssets()
   const mountRef = useRef(null)
   const menuRef = useRef(null)
@@ -447,14 +516,57 @@ export default function Scene3D({ onOpenInspector }) {
     r.roomTexList.forEach((tx) => tx.dispose()); r.roomTexList = []
     const skirtMat = new THREE.MeshStandardMaterial({ color: '#cfc7ba', roughness: 0.8 })
     const freeWallMat = new THREE.MeshStandardMaterial({ color: '#e8e3da', roughness: 0.95, side: THREE.DoubleSide })
+    const frameMat = new THREE.MeshStandardMaterial({ color: '#efe9df', roughness: 0.7, metalness: 0.03 })
     const t = 0.1
+    const opsFor = (ref) => openings.filter((o) => refEq(o.wall, ref))
 
-    const addWallBox = (mat, w, h, d, cx, cy, cz, nx, nz, hideable) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat)
-      m.position.set(cx, cy, cz)
+    // Build a wall (room side or free wall) with its openings punched out, plus
+    // a casing frame around each opening. `over` extends the face past the ends
+    // so room walls still join cleanly at corners.
+    const buildWall = (ref, geom, material, over, thickness, hideable) => {
+      const ops = opsFor(ref)
+      const geo = wallShapeGeometry(geom, thickness, over, ops)
+      const m = new THREE.Mesh(geo, material)
       m.castShadow = true; m.receiveShadow = true
       r.roomGroup.add(m)
-      if (hideable) r.walls.push({ mesh: m, normal: new THREE.Vector3(nx, 0, nz), center: new THREE.Vector3(cx, 0, cz), hidden: false })
+      if (hideable) {
+        r.walls.push({
+          mesh: m,
+          normal: new THREE.Vector3(-geom.nx, 0, -geom.nz),
+          center: new THREE.Vector3(geom.ox + geom.dirx * geom.length / 2, 0, geom.oz + geom.dirz * geom.length / 2),
+          hidden: false,
+        })
+      }
+      for (const o of ops) addOpeningFrame(r.roomGroup, geom, o, thickness, frameMat)
+    }
+
+    // Skirting along the wall, broken around any floor-level opening.
+    const buildSkirt = (ref, geom) => {
+      const L = geom.length
+      const gaps = opsFor(ref)
+        .filter((o) => o.v <= 0.06)
+        .map((o) => [Math.max(0, o.u - 0.05), Math.min(L, o.u + o.w + 0.05)])
+        .filter(([a, b]) => b > a)
+      let segs = [[t / 2, L - t / 2]]
+      for (const [a, b] of gaps) {
+        const next = []
+        for (const [s, e] of segs) {
+          if (b <= s || a >= e) { next.push([s, e]); continue }
+          if (a > s) next.push([s, a])
+          if (b < e) next.push([b, e])
+        }
+        segs = next
+      }
+      const node = new THREE.Group()
+      node.matrixAutoUpdate = false
+      node.matrix.copy(wallMatrix(geom))
+      for (const [s, e] of segs) {
+        if (e - s < 0.02) continue
+        const m = new THREE.Mesh(new THREE.BoxGeometry(e - s, 0.09, 0.04), skirtMat)
+        m.position.set((s + e) / 2, 0.045, t / 2 + 0.02)
+        node.add(m)
+      }
+      r.roomGroup.add(node)
     }
 
     for (const room of rooms) {
@@ -468,30 +580,32 @@ export default function Scene3D({ onOpenInspector }) {
       r.roomGroup.add(floor)
       const wallMat = finishMaterial(room.wallTex, room.wallColor, '#e8e3da', w, height, 1.2, { roughness: 0.95, side: THREE.DoubleSide })
       const on = (s) => !room.wallsOn || room.wallsOn[s] !== false
-      const skirt = (geo, px, pz) => { const m = new THREE.Mesh(geo, skirtMat); m.position.set(px, 0.045, pz); r.roomGroup.add(m) }
       // Walls are centred on the room edges so neighbouring rooms share the
       // same wall line (clean joins) instead of leaving a double-wall gap.
-      if (on('n')) { addWallBox(wallMat, w + t, height, t, cx, height / 2, z, 0, -1, true); skirt(new THREE.BoxGeometry(w - t, 0.09, 0.04), cx, z + t / 2 + 0.02) }
-      if (on('s')) { addWallBox(wallMat, w + t, height, t, cx, height / 2, z + d, 0, 1, true); skirt(new THREE.BoxGeometry(w - t, 0.09, 0.04), cx, z + d - t / 2 - 0.02) }
-      if (on('w')) { addWallBox(wallMat, t, height, d + t, x, height / 2, cz, -1, 0, true); skirt(new THREE.BoxGeometry(0.04, 0.09, d - t), x + t / 2 + 0.02, cz) }
-      if (on('e')) { addWallBox(wallMat, t, height, d + t, x + w, height / 2, cz, 1, 0, true); skirt(new THREE.BoxGeometry(0.04, 0.09, d - t), x + w - t / 2 - 0.02, cz) }
+      for (const side of ['n', 'e', 's', 'w']) {
+        if (!on(side)) continue
+        const ref = { kind: 'room', uid: room.uid, side }
+        const geom = wallGeometry(ref, rooms, walls)
+        if (!geom) continue
+        buildWall(ref, geom, wallMat, t / 2, t, true)
+        buildSkirt(ref, geom)
+      }
     }
 
     // free walls (always visible)
     for (const wl of walls) {
       const len = Math.hypot(wl.x2 - wl.x1, wl.z2 - wl.z1)
       if (len < 1e-3) continue
-      const m = new THREE.Mesh(new THREE.BoxGeometry(len, wl.height, wl.thickness), freeWallMat)
-      m.position.set((wl.x1 + wl.x2) / 2, wl.height / 2, (wl.z1 + wl.z2) / 2)
-      m.rotation.y = -Math.atan2(wl.z2 - wl.z1, wl.x2 - wl.x1)
-      m.castShadow = true; m.receiveShadow = true
-      r.roomGroup.add(m)
+      const ref = { kind: 'wall', uid: wl.uid }
+      const geom = wallGeometry(ref, rooms, walls)
+      if (!geom) continue
+      buildWall(ref, geom, freeWallMat, 0, wl.thickness, false)
     }
 
     if (!r.framed && (rooms.length || walls.length || items.length)) {
       reframe(); r.framed = true
     }
-  }, [rooms, walls, assetMap])
+  }, [rooms, walls, openings, assetMap])
 
   // ---- furniture diff + selection ring/gizmo ----
   useEffect(() => {

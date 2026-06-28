@@ -1,7 +1,7 @@
 import React from 'react'
 import { useStore } from '../store.jsx'
 import {
-  IconCursor, IconSquare, IconWall, IconLayers, IconPlus, IconTune, IconSun, IconPen,
+  IconCursor, IconSquare, IconWall, IconLayers, IconPlus, IconTune, IconSun, IconPen, IconDoor,
 } from './Icons.jsx'
 
 function RailBtn({ icon, label, active, accent, onClick }) {
@@ -33,6 +33,7 @@ export default function Rail({ onOpen, activePanel }) {
             <RailBtn icon={<IconCursor size={20} />} label="Select" active={sideTool === 'select'} onClick={() => dispatch({ type: 'sideTool', tool: 'select' })} />
             <RailBtn icon={<IconSquare size={20} />} label="Box" active={sideTool === 'box'} onClick={() => dispatch({ type: 'sideTool', tool: 'box' })} />
             <RailBtn icon={<IconWall size={20} />} label="Board" active={sideTool === 'board'} onClick={() => dispatch({ type: 'sideTool', tool: 'board' })} />
+            <RailBtn icon={<IconDoor size={20} />} label="Opening" active={sideTool === 'opening'} onClick={() => dispatch({ type: 'sideTool', tool: 'opening' })} />
             <RailBtn icon={<IconLayers size={20} />} label="Presets" active={activePanel === 'presets'} onClick={() => onOpen('presets')} />
           </>
         )}

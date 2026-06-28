@@ -72,7 +72,7 @@ export function buildPreset(id, geom, ref) {
 
 export default function ElevationEditor() {
   const { state, dispatch } = useStore()
-  const { rooms, walls, builtins, selected, units, sideTool } = state
+  const { rooms, walls, builtins, openings, selected, units, sideTool } = state
   const eTool = sideTool
   const wrapRef = useRef(null)
   const svgRef = useRef(null)
@@ -145,10 +145,24 @@ export default function ElevationEditor() {
   const selB = selected?.type === 'builtin' ? builtins.find((b) => b.uid === selected.uid) : null
   const selMine = selB && geom && refEq(selB.wall, current.ref) ? selB : null
 
+  const myOpenings = geom ? openings.filter((o) => refEq(o.wall, current.ref)) : []
+  const selO = selected?.type === 'opening' ? openings.find((o) => o.uid === selected.uid) : null
+  const selMineO = selO && geom && refEq(selO.wall, current.ref) ? selO : null
+
   const rectCorners = (b) => [toScreen(b.u, b.v), toScreen(b.u + b.w, b.v), toScreen(b.u + b.w, b.v + b.h), toScreen(b.u, b.v + b.h)]
 
   function hitTest(px, py) {
     const [u, v] = toWorld(px, py)
+    if (selMineO) {
+      const cs = rectCorners(selMineO)
+      const opp = [2, 3, 0, 1]
+      for (let i = 0; i < 4; i++) {
+        if (Math.hypot(px - cs[i][0], py - cs[i][1]) < HANDLE_HIT) {
+          const o = cs[opp[i]]
+          return { kind: 'o-handle', fixedU: (o[0] - panX) / scale, fixedV: (panY - o[1]) / scale }
+        }
+      }
+    }
     if (selMine) {
       if (selMine.kind === 'board') {
         for (const end of ['1', '2']) {
@@ -167,12 +181,16 @@ export default function ElevationEditor() {
       }
     }
     // wall (room) resize handles — top edge = height, right edge = width
-    if (geom && !selMine) {
+    if (geom && !selMine && !selMineO) {
       const defs = [['len', geom.length, geom.height / 2], ['ht', geom.length / 2, geom.height], ['both', geom.length, geom.height]]
       for (const [which, hu, hv] of defs) {
         const [hx, hy] = toScreen(hu, hv)
         if (Math.hypot(px - hx, py - hy) < HANDLE_HIT) return { kind: 'wall-handle', which }
       }
+    }
+    for (let i = myOpenings.length - 1; i >= 0; i--) {
+      const o = myOpenings[i]
+      if (u >= o.u && u <= o.u + o.w && v >= o.v && v <= o.v + o.h) return { kind: 'opening', uid: o.uid }
     }
     for (let i = mine.length - 1; i >= 0; i--) {
       const b = mine[i]
@@ -201,14 +219,21 @@ export default function ElevationEditor() {
     const [u, v] = toWorld(px, py)
     // Existing objects & handles are grabbable in ANY tool — only empty space draws.
     const h = hitTest(px, py)
-    if (h.kind === 'b-handle') setGesture({ kind: 'resizeB', uid: selMine.uid, fixedU: h.fixedU, fixedV: h.fixedV })
+    if (h.kind === 'o-handle') setGesture({ kind: 'resizeO', uid: selMineO.uid, fixedU: h.fixedU, fixedV: h.fixedV })
+    else if (h.kind === 'b-handle') setGesture({ kind: 'resizeB', uid: selMine.uid, fixedU: h.fixedU, fixedV: h.fixedV })
     else if (h.kind === 'b-end') setGesture({ kind: 'endB', uid: selMine.uid, end: h.end })
     else if (h.kind === 'wall-handle') setGesture({ kind: 'resizeWall', which: h.which })
-    else if (h.kind === 'builtin') {
+    else if (h.kind === 'opening') {
+      const o = myOpenings.find((p) => p.uid === h.uid)
+      dispatch({ type: 'select', sel: { type: 'opening', uid: h.uid } })
+      setGesture({ kind: 'moveO', uid: h.uid, ou: u - o.u, ov: v - o.v })
+    } else if (h.kind === 'builtin') {
       const b = mine.find((o) => o.uid === h.uid)
       dispatch({ type: 'select', sel: { type: 'builtin', uid: h.uid } })
       if (b.kind === 'board') setGesture({ kind: 'moveBoard', uid: h.uid, pu: u, pv: v, u1: b.u1, v1: b.v1, u2: b.u2, v2: b.v2 })
       else setGesture({ kind: 'moveB', uid: h.uid, ou: u - b.u, ov: v - b.v })
+    } else if (eTool === 'opening') {
+      setGesture({ kind: 'drawOpening', u0: snap(u, GRID), v0: snap(v, GRID), cur: { u: snap(u, GRID), v: snap(v, GRID), w: 0, h: 0 } })
     } else if (eTool === 'box') {
       setGesture({ kind: 'drawBox', u0: snap(u, GRID), v0: snap(v, GRID), cur: { u: snap(u, GRID), v: snap(v, GRID), w: 0, h: 0 } })
     } else if (eTool === 'board') {
@@ -239,10 +264,18 @@ export default function ElevationEditor() {
     if (g.kind === 'pan') {
       if (!g.moved && Math.hypot(px - g.sx, py - g.sy) > 4) g.moved = true
       setXf((s) => ({ ...s, panX: g.panX + (px - g.sx), panY: g.panY + (py - g.sy) }))
-    } else if (g.kind === 'drawBox') {
+    } else if (g.kind === 'drawBox' || g.kind === 'drawOpening') {
       const u1 = snap(u, GRID)
       const v1 = snap(v, GRID)
       setGesture((s) => ({ ...s, cur: { u: Math.min(s.u0, u1), v: Math.min(s.v0, v1), w: Math.abs(u1 - s.u0), h: Math.abs(v1 - s.v0) } }))
+    } else if (g.kind === 'moveO') {
+      const u0 = clampV(snap(u - g.ou, GRID), 0, geom.length)
+      const v0 = clampV(snap(v - g.ov, GRID), 0, geom.height)
+      dispatch({ type: 'update', sel: { type: 'opening', uid: g.uid }, patch: { u: u0, v: v0 }, mergeKey: `mo:${g.uid}` })
+    } else if (g.kind === 'resizeO') {
+      const u1 = snap(u, GRID)
+      const v1 = snap(v, GRID)
+      dispatch({ type: 'update', sel: { type: 'opening', uid: g.uid }, patch: { u: Math.min(g.fixedU, u1), v: Math.min(g.fixedV, v1), w: Math.max(0.1, Math.abs(u1 - g.fixedU)), h: Math.max(0.1, Math.abs(v1 - g.fixedV)) }, mergeKey: `ro:${g.uid}` })
     } else if (g.kind === 'drawLine') {
       let u2 = snap(u, GRID)
       let v2 = snap(v, GRID)
@@ -284,7 +317,14 @@ export default function ElevationEditor() {
     if (pointers.current.size < 2) pinch.current = null
     const g = gestureRef.current
     if (g && geom) {
-      if (g.kind === 'drawBox' && g.cur.w > 0.1 && g.cur.h > 0.1) {
+      if (g.kind === 'drawOpening' && g.cur.w > 0.1 && g.cur.h > 0.1) {
+        // Snap a near-floor opening down to the floor and call it a doorway;
+        // anything raised reads as a window. Either can be re-typed later.
+        const toFloor = g.cur.v <= 0.12
+        const v = toFloor ? 0 : g.cur.v
+        const h = toFloor ? g.cur.v + g.cur.h : g.cur.h
+        dispatch({ type: 'addOpening', opening: { wall: current.ref, u: g.cur.u, v, w: g.cur.w, h, kind: toFloor ? 'doorway' : 'window' } })
+      } else if (g.kind === 'drawBox' && g.cur.w > 0.1 && g.cur.h > 0.1) {
         dispatch({ type: 'addBuiltin', builtin: { wall: current.ref, u: g.cur.u, v: g.cur.v, w: g.cur.w, h: g.cur.h, depth: 0.5, kind: 'cubby', color: WOOD.color, tex: WOOD.tex } })
       } else if (g.kind === 'drawLine' && Math.hypot(g.cur.u2 - g.cur.u1, g.cur.v2 - g.cur.v1) > 0.05) {
         dispatch({ type: 'addBuiltin', builtin: { wall: current.ref, kind: 'board', u1: g.cur.u1, v1: g.cur.v1, u2: g.cur.u2, v2: g.cur.v2, thickness: 0.05, depth: 0.04, color: WOOD.color, tex: WOOD.tex } })
@@ -374,6 +414,26 @@ export default function ElevationEditor() {
             <g pointerEvents="none">{hatch}</g>
             <text x={wx0 + 7} y={floorY - 7} fontSize={10} fontWeight={700} letterSpacing="1.5" fill="#39414f" opacity={0.45} pointerEvents="none">FLOOR</text>
 
+            {/* openings (doors / windows / pass-throughs cut into the wall) */}
+            {myOpenings.map((o) => {
+              const sel = selMineO?.uid === o.uid
+              const [bx, by] = toScreen(o.u, o.v + o.h)
+              const wpx = o.w * scale
+              const hpx = o.h * scale
+              const glass = o.kind === 'window'
+              return (
+                <g key={o.uid} pointerEvents="none">
+                  <rect x={bx} y={by} width={wpx} height={hpx} fill={glass ? '#cfe2ef' : '#f3efe8'} fillOpacity={0.92}
+                    stroke={sel ? ACCENT : '#5f6a78'} strokeWidth={sel ? 3 : 2} strokeDasharray="5 4" />
+                  {glass && <line x1={bx} y1={by + hpx / 2} x2={bx + wpx} y2={by + hpx / 2} stroke="#7d8794" strokeWidth={1} strokeDasharray="4 3" />}
+                  {glass && <line x1={bx + wpx / 2} y1={by} x2={bx + wpx / 2} y2={by + hpx} stroke="#7d8794" strokeWidth={1} strokeDasharray="4 3" />}
+                  <text x={bx + wpx / 2} y={by + hpx / 2 + 4} textAnchor="middle" fontSize={10} fontWeight={700} fill="#5f6a78"
+                    fontFamily="-apple-system, system-ui, sans-serif" style={{ textTransform: 'capitalize' }}>{o.kind}</text>
+                  {sel && <rect x={bx - 4} y={by - 4} width={wpx + 8} height={hpx + 8} rx={6} fill="none" stroke={ACCENT} strokeWidth={2} strokeDasharray="6 5" />}
+                </g>
+              )
+            })}
+
             {/* built-ins */}
             {mine.map((b) => {
               const sel = selMine?.uid === b.uid
@@ -393,6 +453,15 @@ export default function ElevationEditor() {
             })}
 
             {/* previews */}
+            {gesture?.kind === 'drawOpening' && (() => {
+              const [bx, by] = toScreen(gesture.cur.u, gesture.cur.v + gesture.cur.h)
+              return (
+                <g pointerEvents="none">
+                  <rect x={bx} y={by} width={gesture.cur.w * scale} height={gesture.cur.h * scale} fill="#cfe2ef" fillOpacity={0.45} stroke={ACCENT} strokeWidth={3} strokeDasharray="6 5" />
+                  <text x={bx + (gesture.cur.w * scale) / 2} y={by - 8} textAnchor="middle" fontSize={12} fontWeight={700} fill="#9a7327">{formatLen(gesture.cur.w, units)} × {formatLen(gesture.cur.h, units)}</text>
+                </g>
+              )
+            })()}
             {gesture?.kind === 'drawBox' && (() => {
               const [bx, by] = toScreen(gesture.cur.u, gesture.cur.v + gesture.cur.h)
               return (
@@ -437,8 +506,21 @@ export default function ElevationEditor() {
               )
             })()}
 
+            {/* selected opening: corner handles + size */}
+            {selMineO && (() => {
+              const cs = rectCorners(selMineO)
+              const [bx, by] = toScreen(selMineO.u + selMineO.w / 2, selMineO.v + selMineO.h)
+              return (
+                <g pointerEvents="none">
+                  {cs.map(([hx, hy], i) => <circle key={i} cx={hx} cy={hy} r={7} fill="#fff" stroke={ACCENT} strokeWidth={2.5} filter="url(#esh)" />)}
+                  <rect x={bx - 78} y={by - 28} width={156} height={20} rx={10} fill={ACCENT} />
+                  <text x={bx} y={by - 14} textAnchor="middle" fontSize={11.5} fontWeight={700} fill="#20160a" fontFamily="-apple-system, system-ui, sans-serif">{formatLen(selMineO.w, units)} × {formatLen(selMineO.h, units)}</text>
+                </g>
+              )
+            })()}
+
             {/* wall (room) resize handles + size — shown when no built-in is selected */}
-            {!selMine && (() => {
+            {!selMine && !selMineO && (() => {
               const tc = toScreen(geom.length / 2, geom.height)
               const rc = toScreen(geom.length, geom.height / 2)
               const cor = toScreen(geom.length, geom.height)
@@ -466,7 +548,9 @@ export default function ElevationEditor() {
       <button className="recenter" onClick={fitView} aria-label="Fit to view"><IconCenter size={20} /></button>
 
       <div className="hint">
-        {selMine ? 'Drag to move · drag handles to resize · edit for depth & finish'
+        {selMineO ? 'Drag to move · drag handles to resize · edit size, sill & type in the panel'
+          : selMine ? 'Drag to move · drag handles to resize · edit for depth & finish'
+          : eTool === 'opening' ? 'Drag on the wall to cut a doorway or window · low = doorway, raised = window'
           : eTool === 'box' ? 'Drag empty space to add a box · tap a piece to edit it'
           : eTool === 'board' ? 'Drag empty space to draw a board · tap a piece to edit it'
           : 'Tap a piece to edit · drag the gold dots to resize the room'}

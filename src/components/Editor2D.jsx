@@ -1,6 +1,7 @@
 import React, { useLayoutEffect, useRef, useState } from 'react'
 import { useStore, footHalf } from '../store.jsx'
 import { defFor } from '../data/catalog.js'
+import { wallGeometry, refEq } from '../wall.js'
 import { effDims, formatLen, haptic } from '../util.js'
 import Footprint from './Footprint.jsx'
 import { IconCenter, IconCheck, IconClose, IconUndo } from './Icons.jsx'
@@ -59,7 +60,7 @@ function distToSeg(px, pz, x1, z1, x2, z2) {
 
 export default function Editor2D() {
   const { state, dispatch } = useStore()
-  const { rooms, walls, items, sketches, selected, units, tool, defaultHeight } = state
+  const { rooms, walls, items, sketches, openings, selected, units, tool, defaultHeight } = state
   // Free placement down to the inch (or 1 cm in metric) — no coarse 2" grid.
   const SNAP = units === 'ft' ? INCH : 0.01
   const [draft, setDraft] = useState([]) // in-progress sketch vertices
@@ -210,6 +211,15 @@ export default function Editor2D() {
         if (distToSeg(wx, wz, a.x, a.z, b.x, b.z) <= 0.18) return { kind: 'sketch', uid: s.uid }
       }
     }
+    // openings sit on a wall line — a tap on one selects it (edit/delete here too)
+    for (let i = openings.length - 1; i >= 0; i--) {
+      const o = openings[i]
+      const g = wallGeometry(o.wall, rooms, walls)
+      if (!g) continue
+      const ax = g.ox + g.dirx * o.u, az = g.oz + g.dirz * o.u
+      const bx = g.ox + g.dirx * (o.u + o.w), bz = g.oz + g.dirz * (o.u + o.w)
+      if (distToSeg(wx, wz, ax, az, bx, bz) <= 0.2) return { kind: 'opening', uid: o.uid }
+    }
     // room wall sides (a click on an edge selects that wall, not the room)
     for (let i = rooms.length - 1; i >= 0; i--) {
       const r = rooms[i]
@@ -314,6 +324,10 @@ export default function Editor2D() {
         setGesture({ kind: 'moveSketch', uid: h.uid, ox: wx, oz: wz, pts: s.pts })
         break
       }
+      case 'opening':
+        dispatch({ type: 'select', sel: { type: 'opening', uid: h.uid } })
+        setGesture(null)
+        break
       case 'roomwall':
         dispatch({ type: 'select', sel: { type: 'roomwall', uid: h.uid, side: h.side } })
         setGesture(null)
@@ -617,6 +631,43 @@ export default function Editor2D() {
             </g>
           )
         })()}
+
+        {/* wall openings — doors (gap + swing arc) / windows / pass-throughs */}
+        {openings.map((o) => {
+          const geom = wallGeometry(o.wall, rooms, walls)
+          if (!geom) return null
+          const ax = geom.ox + geom.dirx * o.u
+          const az = geom.oz + geom.dirz * o.u
+          const bx = geom.ox + geom.dirx * (o.u + o.w)
+          const bz = geom.oz + geom.dirz * (o.u + o.w)
+          const [sax, say] = toScreen(ax, az)
+          const [sbx, sby] = toScreen(bx, bz)
+          const sel = selected?.type === 'opening' && selected.uid === o.uid
+          // perpendicular (screen) for jamb ticks
+          let pdx = -(sby - say); let pdy = sbx - sax
+          const pl = Math.hypot(pdx, pdy) || 1
+          pdx = (pdx / pl) * 6; pdy = (pdy / pl) * 6
+          const stroke = sel ? ACCENT : '#5f6a78'
+          const els = [
+            // mask out the wall under the opening
+            <line key="gap" x1={sax} y1={say} x2={sbx} y2={sby} stroke={FLOOR} strokeWidth={7} strokeLinecap="butt" />,
+            // jambs
+            <line key="j1" x1={sax - pdx} y1={say - pdy} x2={sax + pdx} y2={say + pdy} stroke={stroke} strokeWidth={2.5} strokeLinecap="round" />,
+            <line key="j2" x1={sbx - pdx} y1={sby - pdy} x2={sbx + pdx} y2={sby + pdy} stroke={stroke} strokeWidth={2.5} strokeLinecap="round" />,
+          ]
+          if (o.kind === 'doorway') {
+            // swing arc into the room (inward normal) with the leaf shown open
+            const ox = ax + geom.nx * o.w
+            const oz = az + geom.nz * o.w
+            const [sox, soy] = toScreen(ox, oz)
+            const rr = o.w * scale
+            els.push(<line key="leaf" x1={sax} y1={say} x2={sox} y2={soy} stroke={stroke} strokeWidth={2.5} strokeLinecap="round" />)
+            els.push(<path key="arc" d={`M ${sbx} ${sby} A ${rr} ${rr} 0 0 1 ${sox} ${soy}`} fill="none" stroke={stroke} strokeWidth={1.6} strokeDasharray="4 4" />)
+          } else if (o.kind === 'window') {
+            els.push(<line key="glass" x1={sax} y1={say} x2={sbx} y2={sby} stroke={sel ? ACCENT : '#5b86a8'} strokeWidth={2.5} strokeLinecap="round" />)
+          }
+          return <g key={o.uid} pointerEvents="none">{els}</g>
+        })}
 
         {/* sketches (free-draw plan outlines) */}
         {sketches.map((s) => {

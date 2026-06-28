@@ -55,7 +55,7 @@ function MeasureRow({ label, m, min, max, units, onChange }) {
 
 export default function Inspector({ onClose, onFlash }) {
   const { state, dispatch } = useStore()
-  const { selected, units, items, rooms, walls, builtins, sketches } = state
+  const { selected, units, items, rooms, walls, builtins, sketches, openings } = state
   if (!selected) return null
 
   const sel = selected
@@ -222,6 +222,42 @@ export default function Inspector({ onClose, onFlash }) {
               <FinishPicker value={{ color: b.color, tex: b.tex }} onChange={(f) => set({ color: f.color, tex: f.tex })} />
             </div>
           </div>
+          <div className="btn-row">
+            <button className="btn" onClick={dup}><IconCopy size={18} /> Duplicate</button>
+            <button className="btn danger" onClick={del}><IconTrash size={18} /> Delete</button>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  if (sel.type === 'opening') {
+    const o = openings.find((p) => p.uid === sel.uid)
+    if (!o) return null
+    const names = { doorway: 'Doorway', window: 'Window', passthrough: 'Pass-through' }
+    const setKind = (k) => {
+      if (k === 'doorway') set({ kind: k, v: 0 })
+      else if (k === 'window') set({ kind: k, v: o.v < 0.05 ? 0.9 : o.v })
+      else set({ kind: k })
+    }
+    return (
+      <>
+        <Head title={names[o.kind] || 'Opening'} sub={`${formatLen(o.w, units)} × ${formatLen(o.h, units)}`} onClose={onClose} />
+        <div className="insp">
+          <div className="row">
+            <div className="label">Type</div>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+              {[['doorway', 'Door'], ['window', 'Window'], ['passthrough', 'Open']].map(([k, lbl]) => (
+                <button key={k} className="chip" style={o.kind === k ? activeChip : undefined} onClick={() => setKind(k)}>{lbl}</button>
+              ))}
+            </div>
+          </div>
+          <Slider label="Width" value={o.w} min={0.3} max={6} step={0.05} onChange={(v) => set({ w: v }, `ow:${o.uid}`)} display={formatLen(o.w, units)} />
+          <Slider label="Height" value={o.h} min={0.3} max={5} step={0.05} onChange={(v) => set({ h: v }, `oh:${o.uid}`)} display={formatLen(o.h, units)} />
+          {o.kind !== 'doorway' && (
+            <Slider label="Sill height" value={o.v} min={0} max={3} step={0.05} onChange={(v) => set({ v }, `ov:${o.uid}`)} display={formatLen(o.v, units)} />
+          )}
+          <div className="row"><div className="label">Top of opening</div><div className="val">{formatLen(o.v + o.h, units)}</div></div>
           <div className="btn-row">
             <button className="btn" onClick={dup}><IconCopy size={18} /> Duplicate</button>
             <button className="btn danger" onClick={del}><IconTrash size={18} /> Delete</button>

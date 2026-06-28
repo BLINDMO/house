@@ -20,7 +20,11 @@ function starter() {
     items: [],
     builtins: [],
     sketches: [], // freehand plan outlines: { uid, pts:[{x,z}], closed }
-    selected: null, // { type: 'item' | 'room' | 'wall' | 'roomwall' | 'builtin' | 'sketch', uid }
+    // wall openings (doors / windows / pass-throughs) cut into a wall or room
+    // edge: { uid, wall: ref, u, v, w, h, kind: 'doorway'|'window'|'passthrough' }
+    // where u = distance along the wall, v = height off the floor, w×h = size.
+    openings: [],
+    selected: null, // { type: 'item' | 'room' | 'wall' | 'roomwall' | 'builtin' | 'sketch' | 'opening', uid }
   }
 }
 
@@ -68,8 +72,15 @@ function clampBuiltin(n) {
   if (n.thickness != null) n.thickness = clamp(n.thickness, 0.01, 0.4)
   return n
 }
+function clampOpening(n) {
+  if (n.u != null) n.u = Math.max(0, n.u)
+  if (n.v != null) n.v = clamp(n.v, 0, 6)
+  if (n.w != null) n.w = clamp(n.w, 0.1, 12)
+  if (n.h != null) n.h = clamp(n.h, 0.1, 6)
+  return n
+}
 
-const COLL = { item: 'items', room: 'rooms', wall: 'walls', builtin: 'builtins', sketch: 'sketches' }
+const COLL = { item: 'items', room: 'rooms', wall: 'walls', builtin: 'builtins', sketch: 'sketches', opening: 'openings' }
 
 function patchOne(state, type, id, patch) {
   const key = COLL[type]
@@ -80,6 +91,7 @@ function patchOne(state, type, id, patch) {
     if (type === 'room') clampRoom(n)
     if (type === 'wall') clampWall(n)
     if (type === 'builtin') clampBuiltin(n)
+    if (type === 'opening') clampOpening(n)
     return n
   })
   return { ...state, [key]: arr }
@@ -131,6 +143,11 @@ function reducer(state, action) {
       return { ...state, builtins: [...state.builtins, ...list], selected: list.length ? { type: 'builtin', uid: list[list.length - 1].uid } : state.selected }
     }
 
+    case 'addOpening': {
+      const o = clampOpening({ uid: uid(), kind: 'doorway', v: 0, ...action.opening })
+      return { ...state, openings: [...state.openings, o], selected: { type: 'opening', uid: o.uid } }
+    }
+
     case 'addSketch': {
       const s = { uid: uid(), pts: action.pts, closed: !!action.closed, color: action.color || '#3f7d8c' }
       return { ...state, sketches: [...state.sketches, s], selected: { type: 'sketch', uid: s.uid } }
@@ -175,6 +192,7 @@ function reducer(state, action) {
         ? { ...src, uid: uid(), u1: src.u1 + 0.3, v1: src.v1 + 0.3, u2: src.u2 + 0.3, v2: src.v2 + 0.3 }
         : { ...src, uid: uid(), u: src.u + 0.3, v: src.v + 0.3 }
       else if (type === 'sketch') copy = { ...src, uid: uid(), pts: src.pts.map((p) => ({ x: p.x + 0.3, z: p.z + 0.3 })) }
+      else if (type === 'opening') copy = { ...src, uid: uid(), u: src.u + 0.3 }
       else copy = { ...src, uid: uid(), x: src.x + 0.3, z: src.z + 0.3 }
       return { ...state, [key]: [...state[key], copy], selected: { type, uid: copy.uid } }
     }
@@ -191,7 +209,7 @@ function reducer(state, action) {
 }
 
 // ---- history wrapper (undo / redo with drag coalescing) ----
-const HISTORIC = new Set(['addRoom', 'addWall', 'addSketch', 'addItem', 'addBuiltin', 'addBuiltins', 'update', 'remove', 'duplicate', 'clear', 'reset', 'defaultHeight'])
+const HISTORIC = new Set(['addRoom', 'addWall', 'addSketch', 'addItem', 'addBuiltin', 'addBuiltins', 'addOpening', 'update', 'remove', 'duplicate', 'clear', 'reset', 'defaultHeight'])
 const LIMIT = 80
 
 function root(c, action) {
