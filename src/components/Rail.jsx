@@ -15,7 +15,8 @@ function RailBtn({ icon, label, active, accent, onClick }) {
 
 export default function Rail({ onOpen, activePanel }) {
   const { state, dispatch } = useStore()
-  const { view, tool, ambiance, openingMode } = state
+  const { view, tool, ambiance, openingMode, openShape } = state
+  const SHAPES = [['rect', 'Rect'], ['arch', 'Arch'], ['round', 'Round'], ['star', 'Star']]
 
   return (
     <aside className="rail">
@@ -31,6 +32,14 @@ export default function Rail({ onOpen, activePanel }) {
           <>
             <RailBtn icon={<IconCursor size={20} />} label="Select" active={!openingMode} onClick={() => dispatch({ type: 'openingMode', value: false })} />
             <RailBtn icon={<IconDoor size={20} />} label="Opening" active={openingMode} onClick={() => dispatch({ type: 'openingMode', value: !openingMode })} />
+            {openingMode && (
+              <div className="rail-shapes">
+                {SHAPES.map(([s, lbl]) => (
+                  <button key={s} className={`rail-shape ${(openShape || 'rect') === s ? 'active' : ''}`}
+                    onClick={() => dispatch({ type: 'openShape', value: s })}>{lbl}</button>
+                ))}
+              </div>
+            )}
             <div className="rail-sep" />
             {['day', 'night'].map((a) => (
               <RailBtn key={a} icon={<IconSun size={20} />} label={a[0].toUpperCase() + a.slice(1)} active={ambiance === a} onClick={() => dispatch({ type: 'ambiance', value: a })} />

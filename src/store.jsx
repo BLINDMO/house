@@ -10,7 +10,8 @@ function starter() {
   return {
     view: '2d', // '2d' | '3d'
     tool: 'select', // 'select' | 'room' | 'wall'
-    openingMode: false, // 3D: tap a wall to cut a door/window
+    openingMode: false, // 3D: draw on a wall to cut a door/window
+    openShape: 'rect', // opening shape while drawing: rect|round|arch|star
     units: 'ft',
     ambiance: 'day',
     quality: 'high', // 'normal' | 'high' | 'max' — render quality vs performance
@@ -106,6 +107,8 @@ function reducer(state, action) {
       return { ...state, view: action.view, openingMode: action.view === '3d' ? state.openingMode : false }
     case 'openingMode':
       return { ...state, openingMode: action.value, selected: action.value ? null : state.selected }
+    case 'openShape':
+      return { ...state, openShape: action.value }
     case 'ambiance':
       return { ...state, ambiance: action.value }
     case 'quality':
@@ -167,7 +170,7 @@ function reducer(state, action) {
     }
 
     case 'addOpening': {
-      const o = clampOpening({ uid: uid(), kind: 'doorway', v: 0, ...action.opening })
+      const o = clampOpening({ uid: uid(), kind: 'doorway', v: 0, shape: 'rect', ...action.opening })
       return { ...state, openings: [...state.openings, o], selected: { type: 'opening', uid: o.uid } }
     }
 
@@ -233,7 +236,7 @@ function root(c, action) {
     const prev = c.past[c.past.length - 1]
     return {
       past: c.past.slice(0, -1),
-      present: { ...prev, view: c.present.view, units: c.present.units, ambiance: c.present.ambiance, quality: c.present.quality, tool: c.present.tool, openingMode: c.present.openingMode },
+      present: { ...prev, view: c.present.view, units: c.present.units, ambiance: c.present.ambiance, quality: c.present.quality, tool: c.present.tool, openingMode: c.present.openingMode, openShape: c.present.openShape },
       future: [c.present, ...c.future].slice(0, LIMIT),
       lastKey: null, lastTime: 0,
     }
@@ -243,7 +246,7 @@ function root(c, action) {
     const next = c.future[0]
     return {
       past: [...c.past, c.present].slice(-LIMIT),
-      present: { ...next, view: c.present.view, units: c.present.units, ambiance: c.present.ambiance, quality: c.present.quality, tool: c.present.tool, openingMode: c.present.openingMode },
+      present: { ...next, view: c.present.view, units: c.present.units, ambiance: c.present.ambiance, quality: c.present.quality, tool: c.present.tool, openingMode: c.present.openingMode, openShape: c.present.openShape },
       future: c.future.slice(1),
       lastKey: null, lastTime: 0,
     }

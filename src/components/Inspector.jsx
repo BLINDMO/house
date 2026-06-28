@@ -258,6 +258,14 @@ export default function Inspector({ onClose, onFlash }) {
               ))}
             </div>
           </div>
+          <div className="row">
+            <div className="label">Shape</div>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {[['rect', 'Rect'], ['arch', 'Arch'], ['round', 'Round'], ['star', 'Star']].map(([k, lbl]) => (
+                <button key={k} className="chip" style={(o.shape || 'rect') === k ? activeChip : undefined} onClick={() => set({ shape: k })}>{lbl}</button>
+              ))}
+            </div>
+          </div>
           <Slider label="Width" value={o.w} min={0.3} max={6} step={0.05} onChange={(v) => set({ w: v }, `ow:${o.uid}`)} display={formatLen(o.w, units)} />
           <Slider label="Height" value={o.h} min={0.3} max={5} step={0.05} onChange={(v) => set({ h: v }, `oh:${o.uid}`)} display={formatLen(o.h, units)} />
           {o.kind !== 'doorway' && (

@@ -36,6 +36,34 @@ function wallMatrix(geom) {
   return new THREE.Matrix4().makeBasis(dir, up, nrm).setPosition(geom.ox, 0, geom.oz)
 }
 
+// The hole outline for an opening within its bounding box (u0,v0)-(u1,v1).
+// Supports rectangle (default), round, arch and star shapes.
+function openingHolePath(shape, u0, v0, u1, v1) {
+  const p = new THREE.Path()
+  const cx = (u0 + u1) / 2, cy = (v0 + v1) / 2
+  const rx = (u1 - u0) / 2, ry = (v1 - v0) / 2
+  if (shape === 'round') {
+    p.absellipse(cx, cy, rx, ry, 0, Math.PI * 2, true)
+  } else if (shape === 'arch') {
+    const ay = Math.min(v1 - rx, v1 - 0.02) // springline of the semicircle
+    p.moveTo(u0, v0); p.lineTo(u1, v0); p.lineTo(u1, ay)
+    p.absarc(cx, ay, rx, 0, Math.PI, false)
+    p.lineTo(u0, v0); p.closePath()
+  } else if (shape === 'star') {
+    for (let i = 0; i < 10; i++) {
+      const ang = -Math.PI / 2 + (i * Math.PI) / 5
+      const rad = i % 2 === 0 ? 1 : 0.42
+      const x = cx + Math.cos(ang) * rad * rx
+      const y = cy + Math.sin(ang) * rad * ry
+      i === 0 ? p.moveTo(x, y) : p.lineTo(x, y)
+    }
+    p.closePath()
+  } else {
+    p.moveTo(u0, v0); p.lineTo(u0, v1); p.lineTo(u1, v1); p.lineTo(u1, v0); p.closePath()
+  }
+  return p
+}
+
 // Build a wall as an extruded rectangle with a rectangular hole punched out for
 // each opening (doorway / window / pass-through) — no CSG. `over` extends the
 // face past each end so neighbouring room walls still overlap cleanly at the
@@ -56,9 +84,7 @@ function wallShapeGeometry(geom, thickness, over, ops) {
     const v0 = clampN(o.v, 0, H - 0.04)
     const v1 = clampN(o.v + o.h, v0 + 0.02, H - 0.02)
     if (u1 - u0 < 0.04 || v1 - v0 < 0.04) continue
-    const hole = new THREE.Path()
-    hole.moveTo(u0, v0); hole.lineTo(u0, v1); hole.lineTo(u1, v1); hole.lineTo(u1, v0); hole.closePath()
-    shape.holes.push(hole)
+    shape.holes.push(openingHolePath(o.shape, u0, v0, u1, v1))
   }
   const geo = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false, curveSegments: 1 })
   geo.translate(0, 0, -thickness / 2)
@@ -131,7 +157,7 @@ export default function Scene3D({ onOpenInspector }) {
   const menuRef = useRef(null)
   const refs = useRef({})
   const live = useRef({})
-  live.current = { rooms, walls, items, selected, dispatch, onOpenInspector, openingMode: state.openingMode }
+  live.current = { rooms, walls, items, selected, dispatch, onOpenInspector, openingMode: state.openingMode, openShape: state.openShape }
 
   // resolve a finish "tex" string to a cached base texture, or null for solid colour
   function finishBase(tex) {
@@ -308,7 +334,8 @@ export default function Scene3D({ onOpenInspector }) {
     new THREE.TextureLoader().load(matUrl('grass'), (t) => {
       t.wrapS = t.wrapT = THREE.RepeatWrapping
       t.colorSpace = THREE.SRGBColorSpace
-      t.repeat.set(140, 140)
+      t.repeat.set(200, 200)
+      t.anisotropy = renderer.capabilities.getMaxAnisotropy?.() || 8
       ground.material.map = t
       ground.material.needsUpdate = true
       refs.current.groundTex = t
@@ -347,11 +374,21 @@ export default function Scene3D({ onOpenInspector }) {
     gizmo.renderOrder = 3
     scene.add(gizmo)
 
+    // live preview quad shown while drawing an opening on a wall face
+    const openPreview = new THREE.Mesh(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({ color: '#d9b779', transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthTest: false })
+    )
+    openPreview.matrixAutoUpdate = false
+    openPreview.visible = false
+    openPreview.renderOrder = 4
+    scene.add(openPreview)
+
     Object.assign(refs.current, {
       renderer, scene, camera, controls, roomGroup, furnitureGroup, ground,
-      key, fill, ambient, hemi, pmrem, ring, gizmo, builtinGroup, composer, gtao,
+      key, fill, ambient, hemi, pmrem, ring, gizmo, builtinGroup, composer, gtao, openPreview,
       woodCache: new Map(), imgCache: new Map(), roomTexList: [], walls: [], itemMap: new Map(), framed: false,
-      raycaster: new THREE.Raycaster(), drag: null, rotate: null, pending: null,
+      raycaster: new THREE.Raycaster(), drag: null, rotate: null, pending: null, drawOpen: null,
     })
 
     const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
@@ -369,13 +406,28 @@ export default function Scene3D({ onOpenInspector }) {
     const ancestorUid = (o) => { while (o && o.userData.uid === undefined) o = o.parent; return o }
     const isGizmo = (o) => { while (o) { if (o.userData.gizmo) return true; o = o.parent } return false }
 
+    // sorted bounds of the in-progress opening draw
+    const drawBounds = (d) => ({
+      u0: Math.min(d.u0, d.u1), u1: Math.max(d.u0, d.u1),
+      v0: Math.min(d.v0, d.v1), v1: Math.max(d.v0, d.v1),
+    })
+    const updateOpenPreview = (d) => {
+      const b = drawBounds(d)
+      const w = Math.max(0.001, b.u1 - b.u0), h = Math.max(0.001, b.v1 - b.v0)
+      const M = wallMatrix(d.geom)
+      M.multiply(new THREE.Matrix4().makeTranslation((b.u0 + b.u1) / 2, (b.v0 + b.v1) / 2, 0.06))
+      M.multiply(new THREE.Matrix4().makeScale(w, h, 1))
+      refs.current.openPreview.matrix.copy(M)
+      refs.current.openPreview.visible = true
+    }
+
     const onDown = (e) => {
       setNDC(e)
       const rc = refs.current.raycaster
       rc.setFromCamera(ndc, camera)
       const { items: its, selected: selNow, dispatch: dsp } = live.current
 
-      // 3D opening mode: tap a (visible) wall to cut a door or window
+      // 3D opening mode: press on a (visible) wall and drag to draw the opening
       if (live.current.openingMode) {
         const wm = refs.current.wallMeshes || []
         const hits = rc.intersectObjects(wm.map((w) => w.mesh), false)
@@ -385,15 +437,14 @@ export default function Scene3D({ onOpenInspector }) {
             const g = rec.geom
             const p = hits[0].point
             const u = (p.x - g.ox) * g.dirx + (p.z - g.oz) * g.dirz
-            const door = p.y < 1.2
-            const w = door ? 0.9 : 1.2
-            const h = door ? 2.03 : 1.1
-            const v = door ? 0 : Math.max(0.3, Math.min(g.height - h - 0.05, p.y - h / 2))
-            const uu = Math.max(0.05, Math.min(g.length - w - 0.05, u - w / 2))
-            dsp({ type: 'addOpening', opening: { wall: rec.ref, u: uu, v, w, h, kind: door ? 'doorway' : 'window' } })
-            dsp({ type: 'openingMode', value: false }) // one-shot: back to Select
-            haptic(12)
-            live.current.onOpenInspector?.()
+            controls.enabled = false
+            refs.current.drawOpen = {
+              ref: rec.ref, geom: g, u0: u, v0: p.y, u1: u, v1: p.y,
+              plane: new THREE.Plane().setFromNormalAndCoplanarPoint(
+                new THREE.Vector3(g.nx, 0, g.nz), new THREE.Vector3(g.ox, 0, g.oz)),
+            }
+            updateOpenPreview(refs.current.drawOpen)
+            dom.setPointerCapture?.(e.pointerId)
           }
         }
         return
@@ -432,6 +483,17 @@ export default function Scene3D({ onOpenInspector }) {
     const onMove = (e) => {
       setNDC(e)
       const r = refs.current
+      if (r.drawOpen) {
+        const d = r.drawOpen
+        r.raycaster.setFromCamera(ndc, camera)
+        const pt = new THREE.Vector3()
+        if (r.raycaster.ray.intersectPlane(d.plane, pt)) {
+          d.u1 = (pt.x - d.geom.ox) * d.geom.dirx + (pt.z - d.geom.oz) * d.geom.dirz
+          d.v1 = pt.y
+          updateOpenPreview(d)
+        }
+        return
+      }
       if (r.rotate) {
         const p = floorHit()
         if (!p) return
@@ -449,6 +511,29 @@ export default function Scene3D({ onOpenInspector }) {
     }
     const onUp = (e) => {
       const r = refs.current
+      if (r.drawOpen) {
+        const d = r.drawOpen
+        r.drawOpen = null
+        r.openPreview.visible = false
+        controls.enabled = true
+        const b = drawBounds(d)
+        const g = d.geom
+        const u = clampN(b.u0, 0.02, g.length - 0.02)
+        const w = clampN(b.u1, 0.02, g.length - 0.02) - u
+        let v = Math.max(0, b.v0)
+        let h = Math.min(g.height, b.v1) - v
+        if (w > 0.12 && h > 0.12) {
+          // snap a near-floor opening to the floor → doorway, else window
+          const door = v < 0.18
+          if (door) { h += v; v = 0 }
+          live.current.dispatch({ type: 'addOpening', opening: { wall: d.ref, u, v, w, h, kind: door ? 'doorway' : 'window', shape: live.current.openShape || 'rect' } })
+          live.current.dispatch({ type: 'openingMode', value: false }) // one-shot
+          haptic(12)
+          live.current.onOpenInspector?.()
+        }
+        try { dom.releasePointerCapture?.(e.pointerId) } catch { /* noop */ }
+        return
+      }
       if (r.drag || r.rotate) { r.drag = null; r.rotate = null; controls.enabled = true }
       else if (r.pending) {
         // A tap (not a drag) on empty space: if something is selected, just
@@ -527,6 +612,7 @@ export default function Scene3D({ onOpenInspector }) {
       controls.dispose()
       disposeGroup(roomGroup); disposeGroup(furnitureGroup); disposeGroup(builtinGroup)
       ring.geometry.dispose(); ring.material.dispose()
+      refs.current.openPreview?.geometry.dispose(); refs.current.openPreview?.material.dispose()
       refs.current.woodCache.forEach((t) => t.dispose())
       refs.current.imgCache.forEach((t) => t.dispose())
       refs.current.roomTexList.forEach((t) => t.dispose())
