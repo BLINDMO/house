@@ -1,7 +1,7 @@
 import React from 'react'
 import { useStore } from '../store.jsx'
 import {
-  IconCursor, IconSquare, IconWall, IconPlus, IconTune, IconSun,
+  IconCursor, IconSquare, IconWall, IconPlus, IconTune, IconSun, IconDoor,
 } from './Icons.jsx'
 
 function RailBtn({ icon, label, active, accent, onClick }) {
@@ -15,7 +15,7 @@ function RailBtn({ icon, label, active, accent, onClick }) {
 
 export default function Rail({ onOpen, activePanel }) {
   const { state, dispatch } = useStore()
-  const { view, tool, ambiance } = state
+  const { view, tool, ambiance, openingMode } = state
 
   return (
     <aside className="rail">
@@ -29,6 +29,9 @@ export default function Rail({ onOpen, activePanel }) {
         )}
         {view === '3d' && (
           <>
+            <RailBtn icon={<IconCursor size={20} />} label="Select" active={!openingMode} onClick={() => dispatch({ type: 'openingMode', value: false })} />
+            <RailBtn icon={<IconDoor size={20} />} label="Opening" active={openingMode} onClick={() => dispatch({ type: 'openingMode', value: !openingMode })} />
+            <div className="rail-sep" />
             {['day', 'night'].map((a) => (
               <RailBtn key={a} icon={<IconSun size={20} />} label={a[0].toUpperCase() + a.slice(1)} active={ambiance === a} onClick={() => dispatch({ type: 'ambiance', value: a })} />
             ))}

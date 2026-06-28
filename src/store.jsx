@@ -10,6 +10,7 @@ function starter() {
   return {
     view: '2d', // '2d' | '3d'
     tool: 'select', // 'select' | 'room' | 'wall'
+    openingMode: false, // 3D: tap a wall to cut a door/window
     units: 'ft',
     ambiance: 'day',
     quality: 'high', // 'normal' | 'high' | 'max' — render quality vs performance
@@ -35,7 +36,7 @@ function load() {
     if (!data || !Array.isArray(data.items)) return starter()
     const view = data.view === '3d' ? '3d' : '2d' // Side view was removed
     const ambiance = data.ambiance === 'night' ? 'night' : 'day' // Dusk was removed
-    return { ...starter(), ...data, view, ambiance, tool: 'select', selected: null }
+    return { ...starter(), ...data, view, ambiance, tool: 'select', openingMode: false, selected: null }
   } catch {
     return starter()
   }
@@ -101,7 +102,9 @@ function patchOne(state, type, id, patch) {
 function reducer(state, action) {
   switch (action.type) {
     case 'view':
-      return { ...state, view: action.view }
+      return { ...state, view: action.view, openingMode: action.view === '3d' ? state.openingMode : false }
+    case 'openingMode':
+      return { ...state, openingMode: action.value, selected: action.value ? null : state.selected }
     case 'ambiance':
       return { ...state, ambiance: action.value }
     case 'quality':

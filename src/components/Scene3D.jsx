@@ -131,7 +131,7 @@ export default function Scene3D({ onOpenInspector }) {
   const menuRef = useRef(null)
   const refs = useRef({})
   const live = useRef({})
-  live.current = { rooms, walls, items, selected, dispatch, onOpenInspector }
+  live.current = { rooms, walls, items, selected, dispatch, onOpenInspector, openingMode: state.openingMode }
 
   // resolve a finish "tex" string to a cached base texture, or null for solid colour
   function finishBase(tex) {
@@ -367,6 +367,29 @@ export default function Scene3D({ onOpenInspector }) {
       rc.setFromCamera(ndc, camera)
       const { items: its, selected: selNow, dispatch: dsp } = live.current
 
+      // 3D opening mode: tap a (visible) wall to cut a door or window
+      if (live.current.openingMode) {
+        const wm = refs.current.wallMeshes || []
+        const hits = rc.intersectObjects(wm.map((w) => w.mesh), false)
+        if (hits.length) {
+          const rec = wm.find((w) => w.mesh === hits[0].object)
+          if (rec) {
+            const g = rec.geom
+            const p = hits[0].point
+            const u = (p.x - g.ox) * g.dirx + (p.z - g.oz) * g.dirz
+            const door = p.y < 1.2
+            const w = door ? 0.9 : 1.2
+            const h = door ? 2.03 : 1.1
+            const v = door ? 0 : Math.max(0.3, Math.min(g.height - h - 0.05, p.y - h / 2))
+            const uu = Math.max(0.05, Math.min(g.length - w - 0.05, u - w / 2))
+            dsp({ type: 'addOpening', opening: { wall: rec.ref, u: uu, v, w, h, kind: door ? 'doorway' : 'window' } })
+            haptic(12)
+            live.current.onOpenInspector?.()
+          }
+        }
+        return
+      }
+
       // rotation gizmo
       if (refs.current.gizmo.visible) {
         const gh = rc.intersectObject(refs.current.gizmo, true)
@@ -530,7 +553,7 @@ export default function Scene3D({ onOpenInspector }) {
   useEffect(() => {
     const r = refs.current
     if (!r.roomGroup) return
-    disposeGroup(r.roomGroup); r.roomGroup.clear(); r.walls = []
+    disposeGroup(r.roomGroup); r.roomGroup.clear(); r.walls = []; r.wallMeshes = []
     r.roomTexList.forEach((tx) => tx.dispose()); r.roomTexList = []
     const skirtMat = new THREE.MeshStandardMaterial({ color: '#cfc7ba', roughness: 0.8 })
     const freeWallMat = new THREE.MeshStandardMaterial({ color: '#e8e3da', roughness: 0.95, side: THREE.DoubleSide })
@@ -547,6 +570,7 @@ export default function Scene3D({ onOpenInspector }) {
       const m = new THREE.Mesh(geo, material)
       m.castShadow = true; m.receiveShadow = true
       r.roomGroup.add(m)
+      r.wallMeshes.push({ mesh: m, ref, geom })
       if (hideable) {
         r.walls.push({
           mesh: m,

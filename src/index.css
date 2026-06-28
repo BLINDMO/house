@@ -1119,6 +1119,13 @@ input[type='range']::-moz-range-thumb {
   scrollbar-width: none;
 }
 .rail-group::-webkit-scrollbar { display: none; }
+.rail-sep {
+  width: 26px;
+  height: 1px;
+  background: var(--line);
+  margin: 4px 0;
+  flex: none;
+}
 .rail-btn {
   width: 60px;
   display: flex;
