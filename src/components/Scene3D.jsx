@@ -11,7 +11,7 @@ import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js'
 import { useStore } from '../store.jsx'
 import { useAssets } from '../assets.jsx'
 import { defFor } from '../data/catalog.js'
-import { haptic, effDims } from '../util.js'
+import { haptic, effDims, ROTATED_MQ, appLocal } from '../util.js'
 import { wallGeometry, refEq } from '../wall.js'
 import { buildItem, disposeGroup } from '../three/furniture.js'
 import { MATERIAL_BY_ID, matUrl, HDRI_URL } from '../data/materials.js'
@@ -433,7 +433,8 @@ export default function Scene3D({ onOpenInspector, onFlash }) {
     const ndc = new THREE.Vector2()
     const setNDC = (e) => {
       const r = dom.getBoundingClientRect()
-      ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
+      const [lx, ly, lw, lh] = appLocal(e.clientX, e.clientY, r)
+      ndc.set((lx / lw) * 2 - 1, -((ly / lh) * 2 - 1))
     }
     const floorHit = () => {
       const p = new THREE.Vector3()
@@ -522,6 +523,8 @@ export default function Scene3D({ onOpenInspector, onFlash }) {
         dom.setPointerCapture?.(e.pointerId)
       } else {
         refs.current.pending = { x: e.clientX, y: e.clientY }
+        // when rotated, OrbitControls' own rotate is off — drive orbit ourselves
+        if (ROTATED_MQ.matches) refs.current.orbit = { x: e.clientX, y: e.clientY }
       }
     }
     const onMove = (e) => {
@@ -530,10 +533,22 @@ export default function Scene3D({ onOpenInspector, onFlash }) {
       if (r.visit) {
         const lk = r.fp.look
         if (lk) {
-          r.fp.yaw -= (e.clientX - lk.x) * 0.005
-          r.fp.pitch = Math.max(-1.2, Math.min(1.2, r.fp.pitch - (e.clientY - lk.y) * 0.005))
+          // remap drag axes when the app is rotated to landscape
+          const dYaw = ROTATED_MQ.matches ? (e.clientY - lk.y) : (e.clientX - lk.x)
+          const dPitch = ROTATED_MQ.matches ? -(e.clientX - lk.x) : (e.clientY - lk.y)
+          r.fp.yaw -= dYaw * 0.005
+          r.fp.pitch = Math.max(-1.2, Math.min(1.2, r.fp.pitch - dPitch * 0.005))
           lk.x = e.clientX; lk.y = e.clientY
         }
+        return
+      }
+      if (r.orbit && ROTATED_MQ.matches) {
+        const dLocalX = e.clientY - r.orbit.y
+        const dLocalY = -(e.clientX - r.orbit.x)
+        r.orbit.x = e.clientX; r.orbit.y = e.clientY
+        const k = (2 * Math.PI * 0.7) / (dom.clientHeight || 1)
+        controls._rotateLeft?.(dLocalX * k)
+        controls._rotateUp?.(dLocalY * k)
         return
       }
       if (r.drawOpen) {
@@ -588,6 +603,7 @@ export default function Scene3D({ onOpenInspector, onFlash }) {
         try { dom.releasePointerCapture?.(e.pointerId) } catch { /* noop */ }
         return
       }
+      r.orbit = null
       if (r.drag || r.rotate) { r.drag = null; r.rotate = null; controls.enabled = true }
       else if (r.pending) {
         // A tap (not a drag): a wall selects that wall to edit; a room's floor
@@ -647,6 +663,10 @@ export default function Scene3D({ onOpenInspector, onFlash }) {
     const _up = new THREE.Vector3(0, 1, 0)
     const tick = () => {
       const r = refs.current
+      // when rotated, OrbitControls' pointer rotate/pan would be axis-swapped —
+      // we handle orbit ourselves and keep only its (rotation-safe) zoom.
+      const rot = ROTATED_MQ.matches
+      if (controls.enableRotate === rot) { controls.enableRotate = !rot; controls.enablePan = !rot }
       if (r.visit) {
         const fp = r.fp
         camera.quaternion.setFromEuler(new THREE.Euler(fp.pitch, fp.yaw, 0, 'YXZ'))

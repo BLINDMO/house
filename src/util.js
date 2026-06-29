@@ -1,3 +1,20 @@
+// On touch phones we present the studio in landscape by CSS-rotating the app
+// 90° when the device is held in portrait. This media query is the single
+// source of truth; pointer handlers read it to remap screen → app coordinates.
+export const ROTATED_MQ = (typeof window !== 'undefined' && window.matchMedia)
+  ? window.matchMedia('(orientation: portrait) and (pointer: coarse)')
+  : { matches: false, addEventListener() {}, removeEventListener() {} }
+
+// Screen → app-local coordinates for an element's bounding rect. When the app
+// is rotated 90° clockwise, the element's local origin is the rect's top-right
+// corner with axes swapped. Returns [localX, localY, localW, localH].
+export function appLocal(clientX, clientY, rect) {
+  if (ROTATED_MQ.matches) {
+    return [clientY - rect.top, rect.right - clientX, rect.height, rect.width]
+  }
+  return [clientX - rect.left, clientY - rect.top, rect.width, rect.height]
+}
+
 // Snap a furniture centre to a fine grid and flush against nearby walls.
 export function snapPosition(x, z, halfX, halfZ, room, grid = 0.05, wall = 0.12) {
   let sx = Math.round(x / grid) * grid

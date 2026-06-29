@@ -6,7 +6,6 @@ import Scene3D from './Scene3D.jsx'
 import Rail from './Rail.jsx'
 import Panel from './Panel.jsx'
 import StartScreen from './StartScreen.jsx'
-import RotateGate from './RotateGate.jsx'
 import { IconPlan, IconCube, IconUndo, IconRedo, IconShare, IconNew } from './Icons.jsx'
 
 export default function App() {
@@ -128,8 +127,6 @@ export default function App() {
       {toast && <div className="toast" key={toast.t}>{toast.msg}</div>}
 
       {showStart && <StartScreen onBlank={startBlank} onGenerate={startGenerate} />}
-
-      <RotateGate />
     </div>
   )
 }

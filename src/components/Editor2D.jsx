@@ -3,7 +3,7 @@ import { useStore, footHalf } from '../store.jsx'
 import { defFor } from '../data/catalog.js'
 import { wallGeometry, refEq } from '../wall.js'
 import { MATERIAL_BY_ID, matUrl } from '../data/materials.js'
-import { effDims, formatLen, haptic } from '../util.js'
+import { effDims, formatLen, haptic, appLocal } from '../util.js'
 import Footprint from './Footprint.jsx'
 import { IconCenter, IconCheck, IconClose, IconUndo } from './Icons.jsx'
 
@@ -155,7 +155,8 @@ export default function Editor2D() {
   const toWorld = (px, py) => [(px - panX) / scale, (py - panY) / scale]
   const ptr = (e) => {
     const r = svgRef.current.getBoundingClientRect()
-    return [e.clientX - r.left, e.clientY - r.top]
+    const [lx, ly] = appLocal(e.clientX, e.clientY, r)
+    return [lx, ly]
   }
 
   const selItem = selected?.type === 'item' ? items.find((i) => i.uid === selected.uid) : null

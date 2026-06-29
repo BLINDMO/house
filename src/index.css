@@ -1291,9 +1291,19 @@ input[type='range']::-moz-range-thumb {
     radial-gradient(700px 500px at 50% 30%, rgba(217, 183, 121, 0.12), transparent 60%),
     var(--bg);
 }
-/* Only block touch devices in portrait — desktop narrow windows are fine. */
+/* Game-style forced landscape: on touch phones held in portrait, rotate the
+   whole studio 90° so it always presents (and works) in landscape — no need
+   for the user to enable device auto-rotate. Pointer handlers remap input. */
 @media (orientation: portrait) and (pointer: coarse) {
-  .rotate-gate { display: grid; }
+  .app {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vh;
+    height: 100vw;
+    transform: translateX(100vw) rotate(90deg);
+    transform-origin: top left;
+  }
 }
 .rotate-card {
   text-align: center;
@@ -1351,8 +1361,10 @@ input[type='range']::-moz-range-thumb {
 }
 @keyframes sheetUp { from { transform: translateY(100%); } }
 
-/* ---------- portrait: studio reflows to a bottom-sheet panel ---------- */
-@media (orientation: portrait) {
+/* ---------- portrait on desktop (narrow window): bottom-sheet reflow ----------
+   Touch phones are rotated to landscape instead (see above), so this is scoped
+   to fine pointers only. */
+@media (orientation: portrait) and (pointer: fine) {
   .topbar {
     gap: 6px;
     padding: calc(var(--safe-top) + 10px) calc(var(--safe-right) + 10px) 10px calc(var(--safe-left) + 10px);
