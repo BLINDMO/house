@@ -145,6 +145,13 @@ export default function Inspector({ onClose, onFlash }) {
           <MeasureRow label="Wall height" m={room.height} min={1.5} max={6} units={units} onChange={(v) => set({ height: v }, `rh:${room.uid}`)} />
           <div className="row"><div className="label">Floor area</div><div className="val">{units === 'm' ? `${area.toFixed(1)} m²` : `${Math.round(area * 10.7639)} ft²`}</div></div>
           <div className="row">
+            <div className="label">Lock position</div>
+            <button className="chip" style={{ marginLeft: 'auto', ...(room.locked ? activeChip : {}) }}
+              onClick={() => set({ locked: !room.locked })}>
+              {room.locked ? '🔒 Locked' : '🔓 Unlocked'}
+            </button>
+          </div>
+          <div className="row">
             <div className="label">Wall sides</div>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
               {[['n', 'Top'], ['e', 'Right'], ['s', 'Bottom'], ['w', 'Left']].map(([side, lbl]) => {

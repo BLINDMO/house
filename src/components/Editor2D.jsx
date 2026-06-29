@@ -334,6 +334,10 @@ export default function Editor2D() {
 
   const onDown = (e) => {
     const [px, py] = ptr(e)
+    // Drop pointers left behind by a missed pointerup (e.g. capture lost on a
+    // re-render). Otherwise a stale pointer makes the next tap look like a
+    // two-finger pinch and the view wedges into camera-only mode.
+    if (!gestureRef.current && !pinch.current) pointers.current.clear()
     pointers.current.set(e.pointerId, { x: px, y: py })
     svgRef.current.setPointerCapture(e.pointerId)
 
@@ -376,6 +380,7 @@ export default function Editor2D() {
         setGesture({ kind: 'resizeItem', uid: selItem.uid, cxw: selItem.x, czw: selItem.z, rot: selItem.rot || 0, c: selItem.dim || defFor(selItem.type) })
         break
       case 'room-handle':
+        if (selRoom?.locked) { setGesture(null); break }
         setGesture({ kind: 'resizeRoom', uid: selRoom.uid, handle: h.handle, x0: selRoom.x, z0: selRoom.z, w0: selRoom.w, d0: selRoom.d })
         break
       case 'wall-end':
@@ -410,7 +415,8 @@ export default function Editor2D() {
       case 'room': {
         const r = rooms.find((o) => o.uid === h.uid)
         dispatch({ type: 'select', sel: { type: 'room', uid: h.uid } })
-        setGesture({ kind: 'moveRoom', uid: h.uid, ox: wx - r.x, oz: wz - r.z })
+        if (r.locked) setGesture(null)
+        else setGesture({ kind: 'moveRoom', uid: h.uid, ox: wx - r.x, oz: wz - r.z })
         break
       }
       default:
@@ -630,7 +636,7 @@ export default function Editor2D() {
 
   return (
     <div className="editor2d" ref={wrapRef}>
-      <svg ref={svgRef} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onWheel={onWheel}
+      <svg ref={svgRef} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onLostPointerCapture={onUp} onWheel={onWheel}
         style={{ touchAction: 'none', cursor: tool === 'select' ? 'default' : 'crosshair' }}>
         <defs>
           <filter id="softshadow" x="-30%" y="-30%" width="160%" height="160%">
