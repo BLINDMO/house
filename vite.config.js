@@ -30,12 +30,12 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         runtimeCaching: [
           {
-            // Lazy-loaded Poly Haven CC0 models — cache on first use for offline.
-            urlPattern: ({ url }) => url.hostname === 'dl.polyhaven.org' || url.hostname === 'cdn.polyhaven.com',
+            // Kenney CC0 .glb models — lazy-loaded, cached on first use (offline).
+            urlPattern: ({ url }) => url.pathname.endsWith('.glb'),
             handler: 'CacheFirst',
             options: {
-              cacheName: 'polyhaven-models',
-              expiration: { maxEntries: 600, maxAgeSeconds: 60 * 60 * 24 * 60 },
+              cacheName: 'kenney-models',
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 60 },
               cacheableResponse: { statuses: [0, 200] }
             }
           }

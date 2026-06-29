@@ -1,11 +1,15 @@
 import React, { useMemo, useState } from 'react'
 import { CATALOG } from '../data/catalog.js'
+import { KENNEY_MODELS, kenThumb } from '../data/kenneyModels.js'
 import Footprint from './Footprint.jsx'
 
-// Built-in procedural furniture library — everything renders from code (no
-// asset downloads), so pieces are fully movable, scalable and recolourable.
-const LIBRARY = CATALOG.map((c) => ({ key: c.type, type: c.type, name: c.name, category: c.category, proc: c }))
-const CAT_ORDER = ['Seating', 'Tables', 'Bedroom', 'Storage', 'Kitchen', 'Appliances', 'Bathroom', 'Office', 'Decor']
+// Kenney CC0 low-poly models (with isometric thumbnails) first, then the
+// built-in procedural pieces. Everything is movable, scalable & placeable.
+const LIBRARY = [
+  ...KENNEY_MODELS.map((m) => ({ key: `k:${m.id}`, type: `k:${m.id}`, name: m.name, category: m.category, thumb: kenThumb(m.id), real: true })),
+  ...CATALOG.map((c) => ({ key: c.type, type: c.type, name: c.name, category: c.category, proc: c })),
+]
+const CAT_ORDER = ['Seating', 'Tables', 'Bedroom', 'Bathroom', 'Kitchen', 'Appliances', 'Storage', 'Electronics', 'Office', 'Decor']
 const CATS = ['All', ...CAT_ORDER.filter((c) => LIBRARY.some((i) => i.category === c))]
 
 function ProcThumb({ item }) {
@@ -54,7 +58,9 @@ export default function Catalog({ onPick }) {
         {list.map((item) => (
           <button key={item.key} className="lib-card" onClick={() => onPick(item.type)} title={item.name}>
             <div className="lib-thumb">
-              <ProcThumb item={item.proc} />
+              {item.real
+                ? <img src={item.thumb} loading="lazy" alt={item.name} draggable="false" />
+                : <ProcThumb item={item.proc} />}
             </div>
             <div className="lib-name">{item.name}</div>
           </button>

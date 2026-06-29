@@ -87,8 +87,17 @@ export const CATALOG = [
 
 export const CATALOG_BY_TYPE = Object.fromEntries(CATALOG.map((c) => [c.type, c]))
 
-// Definition lookup for a placed piece (all pieces are procedural).
+import { isKenney, kenId, KENNEY_BY_ID, KENNEY_DEFAULT_DIM } from './kenneyModels.js'
+
+// Definition lookup for a placed piece — a procedural catalog item or a Kenney
+// glTF model (placeholder dims until its real size is measured on first load).
 export function defFor(type) {
+  if (isKenney(type)) {
+    const m = KENNEY_BY_ID[kenId(type)]
+    if (!m) return null
+    const d = KENNEY_DEFAULT_DIM
+    return { type, name: m.name, category: m.category, w: d.w, d: d.d, h: d.h, color: '#b9bec6', shape: 'model', model: kenId(type) }
+  }
   return CATALOG_BY_TYPE[type] || null
 }
 
