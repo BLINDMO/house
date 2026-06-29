@@ -266,10 +266,36 @@ export default function Editor2D() {
     }
     return { xs, zs }
   }
-  function snapEdge(v, targets, thr = 0.28) {
+  function snapEdge(v, targets, thr = 0.4) {
     let best = null
     let bd = thr
     for (const t of targets) { const d = Math.abs(v - t); if (d < bd) { bd = d; best = t } }
+    return best
+  }
+  // Nearest point on any room's wall edge within `thr` metres — lets walls snap
+  // magnetically onto a room's side (not only its corners).
+  function nearestRoomEdge(x, z, thr = 0.45) {
+    let best = null
+    let bd = thr
+    for (const r of rooms) {
+      const segs = [
+        [r.x, r.z, r.x + r.w, r.z],
+        [r.x, r.z + r.d, r.x + r.w, r.z + r.d],
+        [r.x, r.z, r.x, r.z + r.d],
+        [r.x + r.w, r.z, r.x + r.w, r.z + r.d],
+      ]
+      for (const [ax, az, bx, bz] of segs) {
+        const dx = bx - ax
+        const dz = bz - az
+        const len2 = dx * dx + dz * dz || 1
+        let t = ((x - ax) * dx + (z - az) * dz) / len2
+        t = Math.max(0, Math.min(1, t))
+        const px = ax + t * dx
+        const pz = az + t * dz
+        const d = Math.hypot(x - px, z - pz)
+        if (d < bd) { bd = d; best = { x: px, z: pz } }
+      }
+    }
     return best
   }
   const snapX = (v, except) => { const t = snapEdge(v, edgeTargets(except).xs); return t != null ? t : snap(v, SNAP) }
@@ -283,7 +309,7 @@ export default function Editor2D() {
     return out
   }
   // Snap to the nearest anchor within `thr` metres, else null.
-  function snapVertex(x, z, thr = 0.35) {
+  function snapVertex(x, z, thr = 0.45) {
     let best = null
     let bd = thr
     for (const v of wallVertices()) {
@@ -297,6 +323,8 @@ export default function Editor2D() {
   function resolveWallEnd(x1, z1, wx, wz) {
     const v = snapVertex(wx, wz)
     if (v) return { x: v.x, z: v.z }
+    const e = nearestRoomEdge(wx, wz)
+    if (e) return e
     let ex = wx
     let ez = wz
     if (Math.abs(ex - x1) >= Math.abs(ez - z1)) ez = z1
@@ -330,8 +358,9 @@ export default function Editor2D() {
     }
     if (tool === 'wall') {
       const v = snapVertex(wx, wz)
-      const sx = v ? v.x : snapX(wx)
-      const sz = v ? v.z : snapZ(wz)
+      const e = v ? null : nearestRoomEdge(wx, wz)
+      const sx = v ? v.x : e ? e.x : snapX(wx)
+      const sz = v ? v.z : e ? e.z : snapZ(wz)
       setGesture({ kind: 'drawWall', x1: sx, z1: sz, cur: { x1: sx, z1: sz, x2: sx, z2: sz } })
       return
     }
@@ -878,7 +907,7 @@ export default function Editor2D() {
       {empty && (
         <div className="empty">
           <b>Start your floor plan</b>
-          <span>Pick <strong>Room</strong> and drag, or use <strong>Sketch</strong> to free-draw any space with live measurements — or just tap to drop a room.</span>
+          <span>Pick <strong>Room</strong> and drag out a space with live measurements, then add <strong>Walls</strong> — or use the button below to drop a starter room.</span>
           <button className="empty-cta" onClick={() => dispatch({ type: 'addRoom', x: snapX(-1.8), z: snapZ(-1.5), w: 3.6, d: 3, height: defaultHeight })}>
             + Add a room
           </button>

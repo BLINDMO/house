@@ -1,7 +1,7 @@
 import React from 'react'
 import { useStore } from '../store.jsx'
 import {
-  IconCursor, IconSquare, IconWall, IconPlus, IconTune, IconSun, IconDoor, IconWalk, IconRoof,
+  IconCursor, IconSquare, IconWall, IconPlus, IconTune, IconSun, IconDoor,
 } from './Icons.jsx'
 
 function RailBtn({ icon, label, active, accent, onClick }) {
@@ -23,15 +23,15 @@ export default function Rail({ onOpen, activePanel }) {
       <div className="rail-group">
         {view === '2d' && (
           <>
-            <RailBtn icon={<IconCursor size={20} />} label="Select" active={tool === 'select'} onClick={() => dispatch({ type: 'tool', tool: 'select' })} />
-            <RailBtn icon={<IconSquare size={20} />} label="Room" active={tool === 'room'} onClick={() => dispatch({ type: 'tool', tool: 'room' })} />
-            <RailBtn icon={<IconWall size={20} />} label="Wall" active={tool === 'wall'} onClick={() => dispatch({ type: 'tool', tool: 'wall' })} />
+            <RailBtn icon={<IconCursor size={24} />} label="Select" active={tool === 'select'} onClick={() => dispatch({ type: 'tool', tool: 'select' })} />
+            <RailBtn icon={<IconSquare size={24} />} label="Room" active={tool === 'room'} onClick={() => dispatch({ type: 'tool', tool: 'room' })} />
+            <RailBtn icon={<IconWall size={24} />} label="Wall" active={tool === 'wall'} onClick={() => dispatch({ type: 'tool', tool: 'wall' })} />
           </>
         )}
         {view === '3d' && (
           <>
-            <RailBtn icon={<IconCursor size={20} />} label="Select" active={!openingMode} onClick={() => dispatch({ type: 'openingMode', value: false })} />
-            <RailBtn icon={<IconDoor size={20} />} label="Opening" active={openingMode} onClick={() => dispatch({ type: 'openingMode', value: !openingMode })} />
+            <RailBtn icon={<IconCursor size={24} />} label="Select" active={!openingMode} onClick={() => dispatch({ type: 'openingMode', value: false })} />
+            <RailBtn icon={<IconDoor size={24} />} label="Opening" active={openingMode} onClick={() => dispatch({ type: 'openingMode', value: !openingMode })} />
             {openingMode && (
               <div className="rail-shapes">
                 {SHAPES.map(([s, lbl]) => (
@@ -41,11 +41,8 @@ export default function Rail({ onOpen, activePanel }) {
               </div>
             )}
             <div className="rail-sep" />
-            <RailBtn icon={<IconRoof size={20} />} label="Roof" active={state.roof} onClick={() => dispatch({ type: 'roof', value: !state.roof })} />
-            <RailBtn icon={<IconWalk size={20} />} label="Visit" active={state.visitMode} onClick={() => dispatch({ type: 'visitMode', value: !state.visitMode })} />
-            <div className="rail-sep" />
             {['day', 'night'].map((a) => (
-              <RailBtn key={a} icon={<IconSun size={20} />} label={a[0].toUpperCase() + a.slice(1)} active={ambiance === a} onClick={() => dispatch({ type: 'ambiance', value: a })} />
+              <RailBtn key={a} icon={<IconSun size={24} />} label={a[0].toUpperCase() + a.slice(1)} active={ambiance === a} onClick={() => dispatch({ type: 'ambiance', value: a })} />
             ))}
           </>
         )}

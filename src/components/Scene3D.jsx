@@ -15,7 +15,7 @@ import { haptic, effDims, ROTATED_MQ, appLocal } from '../util.js'
 import { wallGeometry, refEq } from '../wall.js'
 import { buildItem, disposeGroup } from '../three/furniture.js'
 import { MATERIAL_BY_ID, matUrl, HDRI_URL } from '../data/materials.js'
-import { IconCenter } from './Icons.jsx'
+import { IconCenter, IconRoof, IconWalk } from './Icons.jsx'
 
 // Outdoor presets — an unseen sun over a green field. Daytime by default.
 const AMBIANCE = {
@@ -1167,7 +1167,11 @@ export default function Scene3D({ onOpenInspector, onFlash }) {
 
   return (
     <div className="scene3d" ref={mountRef}>
-      <button className="recenter" onClick={reframe} aria-label="Recenter view"><IconCenter size={20} /></button>
+      <div className="scene-fab">
+        <button className="recenter" onClick={reframe} aria-label="Recenter view"><IconCenter size={20} /></button>
+        <button className={`recenter ${roof ? 'on' : ''}`} onClick={() => dispatch({ type: 'roof', value: !roof })} aria-label="Toggle roof" title="Roof"><IconRoof size={20} /></button>
+        <button className={`recenter ${visitMode ? 'on' : ''}`} onClick={() => dispatch({ type: 'visitMode', value: !visitMode })} aria-label="Walk-through" title="Visit"><IconWalk size={20} /></button>
+      </div>
       <button ref={menuRef} style={{ display: 'none' }} aria-hidden="true" />
 
       {visitMode && (
