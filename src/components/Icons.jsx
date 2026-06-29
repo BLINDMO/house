@@ -40,6 +40,9 @@ export const IconDoor = (p) => (
 export const IconWalk = (p) => (
   <S {...p}><circle cx="13" cy="4" r="1.6" /><path d="M11 21l2-6-3-2 1-5 3 2 2 2" /><path d="M10 13l-2 8M14 15l2 6" /></S>
 )
+export const IconRoof = (p) => (
+  <S {...p}><path d="M2 12 12 4l10 8" /><path d="M5 10v9h14v-9" /></S>
+)
 export const IconReset = (p) => (
   <S {...p}><path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.3 2.6L3 8" /><path d="M3 4v4h4" /></S>
 )

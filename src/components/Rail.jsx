@@ -1,7 +1,7 @@
 import React from 'react'
 import { useStore } from '../store.jsx'
 import {
-  IconCursor, IconSquare, IconWall, IconPlus, IconTune, IconSun, IconDoor, IconWalk,
+  IconCursor, IconSquare, IconWall, IconPlus, IconTune, IconSun, IconDoor, IconWalk, IconRoof,
 } from './Icons.jsx'
 
 function RailBtn({ icon, label, active, accent, onClick }) {
@@ -41,6 +41,7 @@ export default function Rail({ onOpen, activePanel }) {
               </div>
             )}
             <div className="rail-sep" />
+            <RailBtn icon={<IconRoof size={20} />} label="Roof" active={state.roof} onClick={() => dispatch({ type: 'roof', value: !state.roof })} />
             <RailBtn icon={<IconWalk size={20} />} label="Visit" active={state.visitMode} onClick={() => dispatch({ type: 'visitMode', value: !state.visitMode })} />
             <div className="rail-sep" />
             {['day', 'night'].map((a) => (

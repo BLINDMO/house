@@ -157,6 +157,38 @@ function collinearOpenings(ref, geom, rooms, walls, openings) {
   return out
 }
 
+// A hip roof over a footprint rectangle (with eaves overhang), as a triangle
+// soup; normals are computed and the material is double-sided so winding is a
+// non-issue. Returns a BufferGeometry.
+function hipRoofGeometry(x0, z0, x1, z1, baseY, pitch, ov) {
+  const ax0 = x0 - ov, az0 = z0 - ov, ax1 = x1 + ov, az1 = z1 + ov
+  const cx = (ax0 + ax1) / 2, cz = (az0 + az1) / 2
+  const hx = (ax1 - ax0) / 2, hz = (az1 - az0) / 2
+  const ridgeY = baseY + pitch
+  const A = [ax0, baseY, az0], B = [ax1, baseY, az0], C = [ax1, baseY, az1], D = [ax0, baseY, az1]
+  let R1, R2
+  if (hx >= hz) { const e = hx - hz; R1 = [cx - e, ridgeY, cz]; R2 = [cx + e, ridgeY, cz] }
+  else { const e = hz - hx; R1 = [cx, ridgeY, cz - e]; R2 = [cx, ridgeY, cz + e] }
+  const pos = []
+  const tri = (p, q, r) => pos.push(...p, ...q, ...r)
+  const quad = (p, q, r, s) => { tri(p, q, r); tri(p, r, s) }
+  if (hx >= hz) {
+    quad(A, B, R2, R1)   // front slope (-z)
+    quad(C, D, R1, R2)   // back slope (+z)
+    tri(A, R1, D)        // left hip (-x)
+    tri(B, C, R2)        // right hip (+x)
+  } else {
+    quad(D, A, R1, R2)   // left slope (-x)
+    quad(B, C, R2, R1)   // right slope (+x)
+    tri(A, B, R1)        // front hip (-z)
+    tri(C, D, R2)        // back hip (+z)
+  }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  geo.computeVertexNormals()
+  return geo
+}
+
 function woodTexture(baseHex = '#b08a5e') {
   const col = new THREE.Color(baseHex)
   const br = col.r * 255
@@ -187,7 +219,7 @@ function woodTexture(baseHex = '#b08a5e') {
 
 export default function Scene3D({ onOpenInspector, onFlash }) {
   const { state, dispatch } = useStore()
-  const { rooms, walls, items, builtins, openings, selected, ambiance, quality, visitMode } = state
+  const { rooms, walls, items, builtins, openings, selected, ambiance, quality, visitMode, roof } = state
   const { map: assetMap } = useAssets()
   const mountRef = useRef(null)
   const menuRef = useRef(null)
@@ -701,13 +733,15 @@ export default function Scene3D({ onOpenInspector, onFlash }) {
         controls.update()
       }
       const cp = camera.position
-      if (!r.visit) for (const w of refs.current.walls) {
+      // keep every wall solid in walk-through or with the roof on (exterior view)
+      const solid = r.visit || r.roof
+      if (!solid) for (const w of refs.current.walls) {
         const d = (cp.x - w.center.x) * w.normal.x + (cp.z - w.center.z) * w.normal.z
         if (!w.hidden && d > 0.1) w.hidden = true
         else if (w.hidden && d < -0.1) w.hidden = false
         w.mesh.visible = !w.hidden
       }
-      if (r.visit) for (const w of refs.current.walls) { if (w.hidden) { w.hidden = false; w.mesh.visible = true } }
+      else for (const w of refs.current.walls) { if (w.hidden) { w.hidden = false; w.mesh.visible = true } }
       // position the floating ⋯ button just above the selected item
       const btn = menuRef.current
       if (btn) {
@@ -962,10 +996,26 @@ export default function Scene3D({ onOpenInspector, onFlash }) {
       buildWall(ref, geom, freeWallMat, 0, wl.thickness, false)
     }
 
+    // roof over the whole house footprint (exterior view)
+    r.roof = roof
+    if (roof && rooms.length) {
+      let rx0 = Infinity, rz0 = Infinity, rx1 = -Infinity, rz1 = -Infinity, maxH = 0
+      for (const rm of rooms) {
+        rx0 = Math.min(rx0, rm.x); rz0 = Math.min(rz0, rm.z)
+        rx1 = Math.max(rx1, rm.x + rm.w); rz1 = Math.max(rz1, rm.z + rm.d)
+        maxH = Math.max(maxH, rm.height)
+      }
+      const pitch = Math.max(0.9, Math.min(rx1 - rx0, rz1 - rz0) * 0.32)
+      const roofMat = new THREE.MeshStandardMaterial({ color: '#5b4a44', roughness: 0.85, metalness: 0.02, side: THREE.DoubleSide })
+      const roofMesh = new THREE.Mesh(hipRoofGeometry(rx0, rz0, rx1, rz1, maxH, pitch, 0.4), roofMat)
+      roofMesh.castShadow = true; roofMesh.receiveShadow = true
+      r.roomGroup.add(roofMesh)
+    }
+
     if (!r.framed && (rooms.length || walls.length || items.length)) {
       reframe(); r.framed = true
     }
-  }, [rooms, walls, openings, assetMap])
+  }, [rooms, walls, openings, roof, assetMap])
 
   // ---- furniture diff + selection ring/gizmo ----
   useEffect(() => {

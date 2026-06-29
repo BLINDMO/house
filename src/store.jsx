@@ -16,6 +16,7 @@ function starter() {
     units: 'ft',
     ambiance: 'day',
     quality: 'high', // 'normal' | 'high' | 'max' — render quality vs performance
+    roof: false, // 3D: show a roof + keep exterior walls solid (exterior view)
     defaultHeight: 2.7,
     rooms: [],
     walls: [],
@@ -116,6 +117,8 @@ function reducer(state, action) {
       return { ...state, ambiance: action.value }
     case 'quality':
       return { ...state, quality: action.value }
+    case 'roof':
+      return { ...state, roof: action.value }
     case 'units':
       return { ...state, units: action.value }
     case 'tool':
