@@ -1,12 +1,9 @@
 import React, { useMemo, useState } from 'react'
 import { CATALOG } from '../data/catalog.js'
-import { KENNEY_MODELS, kenThumb } from '../data/kenneyModels.js'
 import Footprint from './Footprint.jsx'
 
-// Kenney CC0 low-poly models (with isometric thumbnails) first, then the
-// built-in procedural pieces. Everything is movable, scalable & placeable.
+// Built-in procedural pieces — everything is movable, scalable & placeable.
 const LIBRARY = [
-  ...KENNEY_MODELS.map((m) => ({ key: `k:${m.id}`, type: `k:${m.id}`, name: m.name, category: m.category, thumb: kenThumb(m.id), real: true })),
   ...CATALOG.map((c) => ({ key: c.type, type: c.type, name: c.name, category: c.category, proc: c })),
 ]
 const CAT_ORDER = ['Seating', 'Tables', 'Bedroom', 'Bathroom', 'Kitchen', 'Appliances', 'Storage', 'Electronics', 'Office', 'Decor']

@@ -11,8 +11,6 @@ import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js'
 import { useStore } from '../store.jsx'
 import { useAssets } from '../assets.jsx'
 import { defFor } from '../data/catalog.js'
-import { isKenney, kenId } from '../data/kenneyModels.js'
-import { loadModel, instanceModel } from '../three/modelLoader.js'
 import { haptic, effDims, ROTATED_MQ, appLocal } from '../util.js'
 import { wallGeometry, refEq } from '../wall.js'
 import { buildItem, disposeGroup } from '../three/furniture.js'
@@ -1024,35 +1022,17 @@ export default function Scene3D({ onOpenInspector, onFlash }) {
     const r = refs.current
     if (!r.furnitureGroup) return
     const map = r.itemMap
-    // Model instances share cached geometry/materials with the prototype, so
-    // we must NOT dispose them — only procedural builds own unique resources.
-    const removeEntry = (entry) => { r.furnitureGroup.remove(entry.group); if (!entry.model) disposeGroup(entry.group) }
+    const removeEntry = (entry) => { r.furnitureGroup.remove(entry.group); disposeGroup(entry.group) }
     const seen = new Set()
     for (const it of items) {
       seen.add(it.uid)
-      const model = isKenney(it.type)
       let entry = map.get(it.uid)
-      if (!entry || entry.type !== it.type || (!model && entry.color !== it.color)) {
+      if (!entry || entry.type !== it.type || entry.color !== it.color) {
         if (entry) removeEntry(entry)
-        if (model) {
-          const group = new THREE.Group()
-          r.furnitureGroup.add(group)
-          entry = { group, type: it.type, model: true, loaded: false }
-          map.set(it.uid, entry)
-          loadModel(kenId(it.type)).then((res) => {
-            const cur = map.get(it.uid)
-            if (!cur || cur.type !== it.type || cur.loaded) return
-            cur.group.add(instanceModel(res))
-            cur.loaded = true
-            const liveIt = live.current.items.find((i) => i.uid === it.uid)
-            if (liveIt && !liveIt.dim) live.current.dispatch({ type: 'itemDim', uid: it.uid, dim: res.dim })
-          }).catch(() => { /* load failed */ })
-        } else {
-          const group = buildItem(it)
-          r.furnitureGroup.add(group)
-          entry = { group, type: it.type, color: it.color }
-          map.set(it.uid, entry)
-        }
+        const group = buildItem(it)
+        r.furnitureGroup.add(group)
+        entry = { group, type: it.type, color: it.color }
+        map.set(it.uid, entry)
       }
       entry.group.position.set(it.x, 0, it.z)
       entry.group.rotation.y = -((it.rot || 0) * Math.PI) / 180

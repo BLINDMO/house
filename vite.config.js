@@ -27,19 +27,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,jpg,webp,hdr,woff2}'],
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-        runtimeCaching: [
-          {
-            // Kenney CC0 .glb models — lazy-loaded, cached on first use (offline).
-            urlPattern: ({ url }) => url.pathname.endsWith('.glb'),
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'kenney-models',
-              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 60 },
-              cacheableResponse: { statuses: [0, 200] }
-            }
-          }
-        ]
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024
       }
     })
   ]
