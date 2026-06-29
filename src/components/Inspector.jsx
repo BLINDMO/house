@@ -65,12 +65,12 @@ export default function Inspector({ onClose, onFlash }) {
   if (sel.type === 'roomwall') {
     const room = rooms.find((r) => r.uid === sel.uid)
     if (!room) return null
-    const names = { n: 'North', e: 'East', s: 'South', w: 'West' }
+    const names = { n: 'Top', e: 'Right', s: 'Bottom', w: 'Left' }
     const on = !room.wallsOn || room.wallsOn[sel.side] !== false
     const toggle = () => dispatch({ type: 'update', sel: { type: 'room', uid: room.uid }, patch: { wallsOn: { ...(room.wallsOn || {}), [sel.side]: !on } } })
     return (
       <>
-        <Head title="Wall section" sub={`${names[sel.side]} wall of this room`} />
+        <Head title="Wall" sub={`${names[sel.side]} wall · tap any wall to edit it`} />
         <div className="insp">
           <div className="row"><div className="label">Status</div><div className="val">{on ? 'Closed' : 'Open (doorway)'}</div></div>
           <div className="btn-row">
@@ -147,7 +147,7 @@ export default function Inspector({ onClose, onFlash }) {
           <div className="row">
             <div className="label">Wall sides</div>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-              {[['n', 'N'], ['e', 'E'], ['s', 'S'], ['w', 'W']].map(([side, lbl]) => {
+              {[['n', 'Top'], ['e', 'Right'], ['s', 'Bottom'], ['w', 'Left']].map(([side, lbl]) => {
                 const on = !room.wallsOn || room.wallsOn[side] !== false
                 return (
                   <button key={side} className="chip" style={on ? activeChip : undefined}

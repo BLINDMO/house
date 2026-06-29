@@ -7,7 +7,7 @@
 //   (nx,nz)        unit inward normal (the depth direction, into the room)
 //   length, height extents of the wall face
 
-const SIDE_NAME = { n: 'North', e: 'East', s: 'South', w: 'West' }
+const SIDE_NAME = { n: 'Top', e: 'Right', s: 'Bottom', w: 'Left' }
 
 export function wallGeometry(ref, rooms, walls) {
   if (!ref) return null
